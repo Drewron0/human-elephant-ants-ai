@@ -75,11 +75,16 @@ class GameState:
         self.board: List[List[Optional[Piece]]] = [[None for _ in range(9)] for _ in range(9)]
         self.current_turn: int = 0
         self.total_turns: int = 0
-        self.undos: int = 0
+        self.undos_p1: int = 0
+        self.undos_p2: int = 0
         self.history: List[Dict[str, Any]] = []
         self.notation: List[str] = []
         self.winner: Optional[int] = None
         self._initialize_board()
+
+    @property
+    def undos(self) -> int:
+        return self.undos_p1 + self.undos_p2
 
     def _initialize_board(self):
         p1_setup = [
@@ -148,7 +153,6 @@ class GameState:
             if target.owner == piece.owner or BEATS.get(piece.p_type) != target.p_type:
                 return None
 
-        # Save snapshot for undo
         board_snapshot = [[(p.clone() if p else None) for p in row] for row in self.board]
         self.history.append({
             'board': board_snapshot,
@@ -161,21 +165,17 @@ class GameState:
         move = Move(start, end, piece.p_type, is_capture, captured_type)
         self.notation.append(move.notation)
 
-        # Move execution
         self.board[r2][c2] = piece
         self.board[r1][c1] = None
 
-        # Objective corner check
         if piece.owner == 0 and (r2, c2) == TARGET_CORNERS[0]:
             self.winner = 0
         elif piece.owner == 1 and (r2, c2) == TARGET_CORNERS[1]:
             self.winner = 1
 
-        # Turn advancement
         self.current_turn = 1 - self.current_turn
         self.total_turns += 1
 
-        # Check if next player has any valid moves; if not, current player wins
         if self.winner is None:
             next_moves = self.get_valid_moves(self.current_turn)
             if not next_moves:
@@ -183,7 +183,7 @@ class GameState:
 
         return move
 
-    def undo(self) -> bool:
+    def undo(self, player_idx: int = 0) -> bool:
         if not self.history:
             return False
 
@@ -194,7 +194,10 @@ class GameState:
         if self.notation:
             self.notation.pop()
         self.total_turns = max(0, self.total_turns - 1)
-        self.undos += 1
+        if player_idx == 0:
+            self.undos_p1 += 1
+        else:
+            self.undos_p2 += 1
         return True
 
     def clone(self) -> 'GameState':
@@ -202,7 +205,8 @@ class GameState:
         new_state.board = [[(p.clone() if p else None) for p in row] for row in self.board]
         new_state.current_turn = self.current_turn
         new_state.total_turns = self.total_turns
-        new_state.undos = self.undos
+        new_state.undos_p1 = self.undos_p1
+        new_state.undos_p2 = self.undos_p2
         new_state.history = []
         new_state.notation = list(self.notation)
         new_state.winner = self.winner
@@ -213,7 +217,8 @@ class GameState:
             'board': [[(p.to_dict() if p else None) for p in row] for row in self.board],
             'current_turn': self.current_turn,
             'total_turns': self.total_turns,
-            'undos': self.undos,
+            'undos_p1': self.undos_p1,
+            'undos_p2': self.undos_p2,
             'notation': list(self.notation),
             'winner': self.winner
         }
@@ -224,7 +229,8 @@ class GameState:
         state.board = [[(Piece.from_dict(cell) if cell else None) for cell in row] for row in data['board']]
         state.current_turn = data['current_turn']
         state.total_turns = data.get('total_turns', 0)
-        state.undos = data.get('undos', 0)
+        state.undos_p1 = data.get('undos_p1', data.get('undos', 0))
+        state.undos_p2 = data.get('undos_p2', 0)
         state.notation = list(data.get('notation', []))
         state.winner = data.get('winner', None)
         state.history = []
