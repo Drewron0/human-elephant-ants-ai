@@ -28,7 +28,7 @@ def _save_json(filename: str, data: Any):
         print(f"Error saving {filename}: {e}")
 
 
-# Profile & Settings Management
+# Profile & Account Management
 
 def get_last_username() -> str:
     cfg = _load_json(CONFIG_FILE, {"last_username": "Player 1", "recent_profiles": ["Player 1"]})
@@ -42,20 +42,21 @@ def save_last_username(username: str):
     recent = cfg.get("recent_profiles", [])
     if username not in recent:
         recent.insert(0, username)
-        cfg["recent_profiles"] = recent[:8]  # keep top 8
+        cfg["recent_profiles"] = recent[:10]
     _save_json(CONFIG_FILE, cfg)
 
 
 def get_recent_profiles() -> List[str]:
     cfg = _load_json(CONFIG_FILE, {"last_username": "Player 1", "recent_profiles": ["Player 1"]})
-    return cfg.get("recent_profiles", ["Player 1"])
+    profiles = cfg.get("recent_profiles", ["Player 1"])
+    return profiles if profiles else ["Player 1"]
 
 
 def generate_guest_name() -> str:
     return f"Guest_{random.randint(1000, 9999)}"
 
 
-# Leaderboard Management (Multi-Category)
+# Multi-Category Leaderboard Management
 
 def save_pve_score(username: str, turns: int, time_left: int, undos: int, difficulty: str = "normal", is_guest: bool = False) -> str:
     db = _load_json(DB_FILE, {"pve": [], "pvp": {}})
@@ -84,20 +85,15 @@ def get_pve_leaderboard(sort_by: str = "turns", difficulty: str = "all") -> List
     db = _load_json(DB_FILE, {"pve": [], "pvp": {}})
     records = db.get("pve", [])
 
-    # Filter by difficulty category
     diff_filter = difficulty.strip().lower()
     if diff_filter != "all":
         records = [r for r in records if r.get("difficulty", "").lower() == diff_filter]
 
-    # Sort by metric
     if sort_by == "turns":
-        # Lowest turns first, then highest time remaining, then lowest undos
         return sorted(records, key=lambda x: (x.get("turns", 9999), -x.get("time_left", 0), x.get("undos", 9999)))
     elif sort_by == "time":
-        # Fastest time remaining (most time left) first, then lowest turns
         return sorted(records, key=lambda x: (-x.get("time_left", 0), x.get("turns", 9999), x.get("undos", 9999)))
     elif sort_by == "undos":
-        # Fewest undos first, then lowest turns, then most time left
         return sorted(records, key=lambda x: (x.get("undos", 9999), x.get("turns", 9999), -x.get("time_left", 0)))
     return records
 
@@ -123,14 +119,15 @@ def clear_pve_leaderboard(difficulty: str = "all"):
     _save_json(DB_FILE, db)
 
 
-def update_pvp_stats(username: str, won: bool):
+def update_pvp_stats(username: str, won: bool, undos: int = 0):
     db = _load_json(DB_FILE, {"pve": [], "pvp": {}})
     username = username.strip() or "Player"
-    stats = db["pvp"].get(username, {"wins": 0, "losses": 0, "last_played": ""})
+    stats = db["pvp"].get(username, {"wins": 0, "losses": 0, "undos": 0, "last_played": ""})
     if won:
         stats["wins"] += 1
     else:
         stats["losses"] += 1
+    stats["undos"] = stats.get("undos", 0) + undos
     stats["last_played"] = datetime.now().strftime("%Y-%m-%d %H:%M")
     db["pvp"][username] = stats
     _save_json(DB_FILE, db)
@@ -156,7 +153,7 @@ def clear_pvp_stats():
     _save_json(DB_FILE, db)
 
 
-# Mid-game PvE Save Slots Management
+# Mid-game PvE Save Slots
 
 def save_game_slot(slot_id: str, slot_name: str, payload: Dict[str, Any]):
     saves = _load_json(SAVES_FILE, {})

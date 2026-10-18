@@ -6,7 +6,9 @@ from typing import Callable, Optional, Dict, Any
 
 class NetworkManager:
     def __init__(self, is_host: bool, ip: str = '127.0.0.1', port: int = 5555,
+                 local_name: str = 'Player',
                  on_connect: Optional[Callable[[], None]] = None,
+                 on_opponent_name: Optional[Callable[[str], None]] = None,
                  on_move: Optional[Callable[[list, list], None]] = None,
                  on_restart: Optional[Callable[[], None]] = None,
                  on_surrender: Optional[Callable[[], None]] = None,
@@ -14,12 +16,13 @@ class NetworkManager:
         self.is_host = is_host
         self.ip = ip
         self.port = port
+        self.local_name = local_name
         self.conn: Optional[socket.socket] = None
         self.server_sock: Optional[socket.socket] = None
         self.running = False
-        
-        # Callbacks
+
         self.on_connect = on_connect
+        self.on_opponent_name = on_opponent_name
         self.on_move = on_move
         self.on_restart = on_restart
         self.on_surrender = on_surrender
@@ -40,6 +43,9 @@ class NetworkManager:
             else:
                 self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.conn.connect((self.ip, self.port))
+
+            # Send local name immediately upon handshake
+            self._send({'type': 'NAME', 'name': self.local_name})
 
             if self.on_connect:
                 self.on_connect()
@@ -68,7 +74,9 @@ class NetworkManager:
 
     def _handle_message(self, msg: Dict[str, Any]):
         msg_type = msg.get('type')
-        if msg_type == 'MOVE' and self.on_move:
+        if msg_type == 'NAME' and self.on_opponent_name:
+            self.on_opponent_name(msg.get('name', 'Opponent'))
+        elif msg_type == 'MOVE' and self.on_move:
             self.on_move(msg.get('start'), msg.get('end'))
         elif msg_type == 'RESTART' and self.on_restart:
             self.on_restart()
