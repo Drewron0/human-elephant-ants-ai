@@ -13,3 +13,8 @@ env/
 .vscode/
 .idea/
 *.swp
+
+# Storage
+leaderboard.json
+saved_games.json
+app_config.json
