@@ -4,6 +4,8 @@ from ui_theme import THEME, setup_ttk_styles
 from views.menu_view import MainMenuView
 from views.config_view import ConfigView
 from views.game_view import GameView
+from views.puzzle_game_view import PuzzleGameView
+from views.benchmark_view import BenchmarkView
 from views.leaderboard_view import LeaderboardView
 from views.saves_view import SavedGamesView
 from views.tutorial_view import TutorialView
@@ -16,7 +18,7 @@ class GameApp(tk.Tk):
     """
     def __init__(self):
         super().__init__()
-        self.title("Human Elephant Ant: 9x9 Board Game")
+        self.title("Chess-Sut: Human Elephant Ant Tactical Board Game")
 
         # Open maximized by default on Windows so all contents fit without cutoffs
         try:
@@ -52,6 +54,11 @@ class GameApp(tk.Tk):
             config = kwargs.get('config', {})
             saved_state = kwargs.get('saved_state', None)
             self.current_view = GameView(self.container, self, config=config, saved_state=saved_state)
+        elif view_name == 'puzzle_game':
+            config = kwargs.get('config', {})
+            self.current_view = PuzzleGameView(self.container, self, config=config)
+        elif view_name == 'benchmark':
+            self.current_view = BenchmarkView(self.container, self)
         elif view_name == 'leaderboard':
             self.current_view = LeaderboardView(self.container, self)
         elif view_name == 'saves':
@@ -67,3 +74,6 @@ class GameApp(tk.Tk):
 
     def start_game(self, config: Dict[str, Any], saved_state: Optional[Dict[str, Any]] = None):
         self.show_view('game', config=config, saved_state=saved_state)
+
+    def start_puzzle(self, config: Dict[str, Any]):
+        self.show_view('puzzle_game', config=config)

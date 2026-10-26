@@ -43,9 +43,11 @@ class MainMenuView(tk.Frame):
         )
         card.pack()
 
-        w = 24
-        ButtonPrimary(card, text="Play vs AI (PvE)", command=lambda: self.app.open_config('PvE'), width=w).pack(pady=5)
+        w = 26
+        ButtonPrimary(card, text="Puzzle Mode (Chess-Sut Defender)", command=lambda: self.app.open_config('Puzzle'), width=w).pack(pady=5)
+        ButtonSecondary(card, text="Play vs AI (PvE)", command=lambda: self.app.open_config('PvE'), width=w).pack(pady=5)
         ButtonSecondary(card, text="Play vs Player (PvP)", command=lambda: self.app.open_config('PvP'), width=w).pack(pady=5)
+        ButtonSecondary(card, text="Simulation & Benchmark Lab", command=lambda: self.app.show_view('benchmark'), width=w).pack(pady=5)
         ButtonSecondary(card, text="Load Saved Game", command=lambda: self.app.show_view('saves'), width=w).pack(pady=5)
         ButtonSecondary(card, text="Leaderboard and Records", command=lambda: self.app.show_view('leaderboard'), width=w).pack(pady=5)
         ButtonSecondary(card, text="How to Play", command=lambda: self.app.show_view('tutorial'), width=w).pack(pady=5)
