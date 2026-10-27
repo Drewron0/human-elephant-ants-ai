@@ -3,18 +3,28 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Environments
+# Python Virtual Environments
 .venv/
 venv/
 ENV/
 env/
+env.bak/
+venv.bak/
+
+# Environment variables & secrets
+.env
+.env.local
 
 # IDEs and Editors
 .vscode/
 .idea/
 *.swp
+*.swo
 
-# Storage
+# Local runtime storage & cache
 leaderboard.json
 saved_games.json
+stage_leaderboards.json
+custom_stages.json
 app_config.json
+*.log

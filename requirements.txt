@@ -1,0 +1,7 @@
+# Chess-Sut AI Agent Dependencies
+# Core functionality relies entirely on Python standard library (tkinter, json, math, socket, etc.)
+# Python >= 3.8 recommended
+
+# Optional testing & linting tools
+pytest>=8.0.0
+black>=24.0.0
