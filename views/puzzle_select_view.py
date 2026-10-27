@@ -4,7 +4,7 @@ from typing import Dict, Any, List, Optional
 
 from ui_theme import (
     THEME, FONT_NAME, ButtonPrimary, ButtonSecondary, ButtonDanger,
-    draw_board_thumbnail, ThemedModal
+    draw_board_thumbnail, ThemedModal, bind_mousewheel
 )
 import storage
 from puzzle_logic import (
@@ -93,6 +93,8 @@ class PuzzleSelectView(tk.Frame):
         grid_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.grid_canvas.bind("<Configure>", self._on_canvas_configure)
+        bind_mousewheel(self.scrollable_grid, self.grid_canvas)
+        bind_mousewheel(self.grid_canvas, self.grid_canvas)
 
         # RIGHT SELECTION SIDEBAR PANE
         self.right_pane = tk.Frame(self.paned, bg=THEME['surface'], bd=0, highlightbackground=THEME['border'], highlightthickness=1)
@@ -109,11 +111,15 @@ class PuzzleSelectView(tk.Frame):
             "<Configure>",
             lambda e: sidebar_scroll_canvas.configure(scrollregion=sidebar_scroll_canvas.bbox("all"))
         )
-        sidebar_scroll_canvas.create_window((0, 0), window=content, anchor="nw")
+        self.sidebar_window = sidebar_scroll_canvas.create_window((0, 0), window=content, anchor="nw")
         sidebar_scroll_canvas.configure(yscrollcommand=scroll_y.set)
 
         sidebar_scroll_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
+        sidebar_scroll_canvas.bind("<Configure>", lambda e: sidebar_scroll_canvas.itemconfig(self.sidebar_window, width=e.width))
+
+        bind_mousewheel(content, sidebar_scroll_canvas)
+        bind_mousewheel(sidebar_scroll_canvas, sidebar_scroll_canvas)
 
         # Selected Stage Info Card
         self.card_info = tk.Frame(content, bg=THEME['surface_light'], padx=12, pady=10, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
@@ -311,6 +317,7 @@ class PuzzleSelectView(tk.Frame):
         for col_idx in range(cols):
             self.scrollable_grid.columnconfigure(col_idx, weight=1)
 
+        bind_mousewheel(self.scrollable_grid, self.grid_canvas)
         self._refresh_card_highlights()
         self._update_sidebar()
 

@@ -5,7 +5,7 @@ import time
 
 from ui_theme import (
     THEME, FONT_NAME, HOTKEYS, ButtonPrimary, ButtonSecondary, ButtonDanger,
-    ThemedModal, draw_star
+    ThemedModal, draw_star, bind_mousewheel
 )
 from game_logic import GameState, Piece
 from puzzle_logic import PuzzleScenario, PuzzleSession, PRECONFIGURED_PUZZLES, generate_winnable_puzzle
@@ -117,11 +117,15 @@ class PuzzleGameView(tk.Frame):
             "<Configure>",
             lambda e: sidebar_scroll_canvas.configure(scrollregion=sidebar_scroll_canvas.bbox("all"))
         )
-        sidebar_scroll_canvas.create_window((0, 0), window=content, anchor="nw")
+        self.sidebar_canvas_window = sidebar_scroll_canvas.create_window((0, 0), window=content, anchor="nw")
         sidebar_scroll_canvas.configure(yscrollcommand=scroll_y.set)
 
         sidebar_scroll_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
+        sidebar_scroll_canvas.bind("<Configure>", lambda e: sidebar_scroll_canvas.itemconfig(self.sidebar_canvas_window, width=e.width))
+
+        bind_mousewheel(content, sidebar_scroll_canvas)
+        bind_mousewheel(sidebar_scroll_canvas, sidebar_scroll_canvas)
 
         # Player & AI Info Card
         players_card = tk.Frame(content, bg=THEME['surface_card'], padx=10, pady=8, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
@@ -197,6 +201,7 @@ class PuzzleGameView(tk.Frame):
         )
         self.list_notation.pack(fill=tk.BOTH, expand=True)
         hist_scroll.config(command=self.list_notation.yview)
+        bind_mousewheel(self.list_notation, self.list_notation)
 
         # Action Buttons
         btn_frame = tk.Frame(content, bg=THEME['surface'])
@@ -230,7 +235,7 @@ class PuzzleGameView(tk.Frame):
                 self.after_cancel(self._resize_job)
             except Exception:
                 pass
-        self._resize_job = self.after(20, lambda w=event.width, h=event.height: self._apply_board_resize(w, h))
+        self._resize_job = self.after(35, lambda w=event.width, h=event.height: self._apply_board_resize(w, h))
 
     def _apply_board_resize(self, width: int, height: int):
         self._resize_job = None
@@ -241,10 +246,12 @@ class PuzzleGameView(tk.Frame):
         new_sq_size = dim // size
         total_canvas_dim = new_sq_size * size + 30
 
-        if new_sq_size != self.current_sq_size or self.canvas.winfo_width() != total_canvas_dim:
-            self.current_sq_size = new_sq_size
-            self.canvas.config(width=total_canvas_dim, height=total_canvas_dim)
-            self._draw_board()
+        if new_sq_size == self.current_sq_size and self.canvas.winfo_width() == total_canvas_dim:
+            return
+
+        self.current_sq_size = new_sq_size
+        self.canvas.config(width=total_canvas_dim, height=total_canvas_dim)
+        self._draw_board()
 
     def _draw_board(self):
         self.canvas.delete("all")
@@ -276,6 +283,7 @@ class PuzzleGameView(tk.Frame):
 
                 base_color = THEME['board_light'] if (r + c) % 2 == 0 else THEME['board_dark']
                 is_p1_target = ((r, c) == self.state.target_corners[0])
+                is_p2_target = ((r, c) == self.state.target_corners[1])
 
                 cell_fill = base_color
                 outline_color = THEME['board_grid']
@@ -284,6 +292,10 @@ class PuzzleGameView(tk.Frame):
                 if is_p1_target:
                     cell_fill = THEME['corner_p1']
                     outline_color = '#F57F17'
+                    outline_width = 2
+                elif is_p2_target:
+                    cell_fill = THEME['corner_p2']
+                    outline_color = '#C62828'
                     outline_width = 2
 
                 if self.last_move and ((r, c) == self.last_move[0] or (r, c) == self.last_move[1]):
@@ -302,6 +314,8 @@ class PuzzleGameView(tk.Frame):
 
                 if is_p1_target and self.state.board[r][c] is None:
                     draw_star(self.canvas, (x0 + x1) / 2, (y0 + y1) / 2, max(6, sq_size * 0.28), fill='#F57F17', outline='')
+                elif is_p2_target and self.state.board[r][c] is None:
+                    draw_star(self.canvas, (x0 + x1) / 2, (y0 + y1) / 2, max(6, sq_size * 0.28), fill='#C62828', outline='')
 
                 if (r, c) in self.valid_targets and self.state.board[r][c] is None:
                     cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
@@ -364,6 +378,7 @@ class PuzzleGameView(tk.Frame):
         self.session.record_player_step()
 
         self._update_ui_state()
+        self.update_idletasks()
 
         status = self.session.evaluate_status(self.state)
         if status == 'SOLVED':
@@ -374,7 +389,7 @@ class PuzzleGameView(tk.Frame):
             return
 
         if self.state.current_turn == 1 and self.is_game_active:
-            self._trigger_ai_move()
+            self.after(40, self._trigger_ai_move)
 
     def _trigger_ai_move(self):
         agent_model = self.config.get('agent_model', 'proposed_d6')

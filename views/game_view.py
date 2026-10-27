@@ -3,7 +3,7 @@ from tkinter import ttk
 from typing import Dict, Any, Optional, Tuple, List
 from ui_theme import (
     THEME, FONT_NAME, HOTKEYS, ButtonPrimary, ButtonSecondary, ButtonDanger,
-    ThemedModal, draw_star
+    ThemedModal, draw_star, bind_mousewheel
 )
 from game_logic import GameState, Piece, TARGET_CORNERS
 from ai_engine import get_ai_move_with_delay
@@ -144,6 +144,7 @@ class GameView(tk.Frame):
         )
         self.list_notation.pack(fill=tk.BOTH, expand=True)
         scroll.config(command=self.list_notation.yview)
+        bind_mousewheel(self.list_notation, self.list_notation)
 
         # Action Buttons Grid
         btn_frame = tk.Frame(right_panel, bg=THEME['surface'])
@@ -221,7 +222,7 @@ class GameView(tk.Frame):
                 self.after_cancel(self._resize_job)
             except Exception:
                 pass
-        self._resize_job = self.after(20, lambda w=event.width, h=event.height: self._apply_board_resize(w, h))
+        self._resize_job = self.after(35, lambda w=event.width, h=event.height: self._apply_board_resize(w, h))
 
     def _apply_board_resize(self, width: int, height: int):
         self._resize_job = None
@@ -232,10 +233,12 @@ class GameView(tk.Frame):
         new_sq_size = dim // size
         total_canvas_dim = new_sq_size * size + 30
 
-        if new_sq_size != self.current_sq_size or self.canvas.winfo_width() != total_canvas_dim:
-            self.current_sq_size = new_sq_size
-            self.canvas.config(width=total_canvas_dim, height=total_canvas_dim)
-            self._draw_board()
+        if new_sq_size == self.current_sq_size and self.canvas.winfo_width() == total_canvas_dim:
+            return
+
+        self.current_sq_size = new_sq_size
+        self.canvas.config(width=total_canvas_dim, height=total_canvas_dim)
+        self._draw_board()
 
     def _draw_board(self):
         self.canvas.delete("all")
@@ -382,6 +385,7 @@ class GameView(tk.Frame):
             self.network_mgr.send_move(start, end)
 
         self._update_ui_state()
+        self.update_idletasks()
 
         if self.state.winner is not None:
             self._handle_game_over(self.state.winner, "Target Corner Reached")
@@ -389,11 +393,16 @@ class GameView(tk.Frame):
 
         # PVE: AI delay calculation so AI clock ticks and human can win via time
         if self.config.get('mode') == 'PvE' and self.state.current_turn == 1 and self.is_game_active:
-            diff = self.config.get('difficulty', 'normal')
-            ai_move, delay_sec = get_ai_move_with_delay(self.state, diff)
-            if ai_move:
-                delay_ms = int(delay_sec * 1000)
-                self.ai_timer_id = self.after(delay_ms, lambda: self._execute_move(ai_move[0], ai_move[1]))
+            def _schedule_pve_ai():
+                if not self.is_game_active or self.state.current_turn != 1:
+                    return
+                diff = self.config.get('difficulty', 'normal')
+                ai_move, delay_sec = get_ai_move_with_delay(self.state, diff)
+                if ai_move and self.is_game_active:
+                    delay_ms = int(delay_sec * 1000)
+                    self.ai_timer_id = self.after(delay_ms, lambda: self._execute_move(ai_move[0], ai_move[1]))
+
+            self.after(40, _schedule_pve_ai)
 
     def _update_ui_state(self):
         self._draw_board()
