@@ -5,6 +5,7 @@ from typing import List, Tuple, Dict, Any, Optional
 from game_logic import GameState, Piece, BEATS, PREDATORS, TARGET_CORNERS
 from puzzle_logic import (
     bfs_safe_path,
+    find_optimal_winning_path,
     generate_winnable_puzzle,
     PRECONFIGURED_STAGES_6X6,
     PuzzleScenario,
@@ -51,9 +52,8 @@ class TestPuzzleLogic(unittest.TestCase):
     # Tests BFS safe path search, preset stages, and random puzzle generation
     def test_all_10_preset_stages_winnable(self) -> None:
         for stage_key, scenario in PRECONFIGURED_STAGES_6X6.items():
-            start = (scenario.board_size - 1, 0)
             target = (0, scenario.board_size - 1)
-            d, path = bfs_safe_path(scenario.board_size, scenario.pieces, start, target, 'H')
+            d, path, best_pc = find_optimal_winning_path(scenario.board_size, scenario.pieces, target)
             self.assertIsNotNone(
                 path,
                 f"Preset stage '{stage_key}' must have a valid winning path"
@@ -64,9 +64,8 @@ class TestPuzzleLogic(unittest.TestCase):
     def test_random_winnable_generator(self) -> None:
         for _ in range(3):
             scenario = generate_winnable_puzzle(board_size=6, min_steps=5, max_steps=8)
-            start = (scenario.board_size - 1, 0)
             target = (0, scenario.board_size - 1)
-            d, path = bfs_safe_path(scenario.board_size, scenario.pieces, start, target, 'H')
+            d, path, best_pc = find_optimal_winning_path(scenario.board_size, scenario.pieces, target)
             self.assertIsNotNone(path)
             self.assertIsNotNone(d)
             self.assertGreaterEqual(d, 3)

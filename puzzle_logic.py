@@ -53,6 +53,34 @@ def bfs_safe_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
     return None, []
 
 
+def find_optimal_winning_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
+                              target_coord: Optional[Tuple[int, int]] = None) -> Tuple[Optional[int], List[Tuple[int, int]], Optional[Tuple[int, int, str]]]:
+    """
+    Finds the shortest safe winning path among ALL player pieces (owner == 0).
+    Returns (shortest_distance, path, best_piece_info).
+    """
+    if target_coord is None:
+        target_coord = (0, board_size - 1)
+
+    player_pieces = [(r, c, pt) for r, c, owner, pt in pieces if owner == 0]
+    if not player_pieces:
+        return None, [], None
+
+    best_dist: Optional[int] = None
+    best_path: List[Tuple[int, int]] = []
+    best_piece: Optional[Tuple[int, int, str]] = None
+
+    for r, c, pt in player_pieces:
+        d, path = bfs_safe_path(board_size, pieces, (r, c), target_coord, pt)
+        if d is not None:
+            if best_dist is None or d < best_dist:
+                best_dist = d
+                best_path = path
+                best_piece = (r, c, pt)
+
+    return best_dist, best_path, best_piece
+
+
 class PuzzleScenario:
     def __init__(self, id_str: str, title: str, description: str,
                  board_size: int, s_optimal: int,
@@ -108,93 +136,93 @@ class PuzzleScenario:
 PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
     'stage_6x6_01': PuzzleScenario(
         id_str='stage_6x6_01',
-        title='Stage 1: Open Plains',
-        description='Straightforward advance past a lone defender to test movement rules.',
+        title='Stage 1: Advance Guard',
+        description='Coordinate Human and Elephant to advance past dispersed defenders.',
         board_size=6,
         s_optimal=5,
-        pieces=[(5, 0, 0, 'H'), (2, 4, 1, 'H')],
+        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (2, 4, 1, 'H'), (3, 3, 1, 'A')],
         optimal_path=[(5, 0), (4, 1), (3, 2), (2, 3), (1, 4), (0, 5)]
     ),
     'stage_6x6_02': PuzzleScenario(
         id_str='stage_6x6_02',
-        title='Stage 2: First Barrier',
-        description='Navigate through dispersed hostile units stationed across the grid.',
+        title='Stage 2: Flank Escort',
+        description='Ant screens against AI Elephant while Human heads toward the corner.',
         board_size=6,
         s_optimal=5,
-        pieces=[(5, 0, 0, 'H'), (2, 3, 1, 'A'), (4, 5, 1, 'E'), (3, 0, 1, 'H')],
+        pieces=[(5, 0, 0, 'H'), (4, 0, 0, 'A'), (2, 3, 1, 'A'), (4, 5, 1, 'E')],
         optimal_path=[(5, 0), (4, 1), (3, 2), (2, 3), (1, 4), (0, 5)]
     ),
     'stage_6x6_03': PuzzleScenario(
         id_str='stage_6x6_03',
-        title='Stage 3: Scout Crossing',
-        description='Elephant sentry covers the central diagonal. Requires evasive flank step.',
+        title='Stage 3: The Pincer',
+        description='Dual-front pressure with Human and Ant forcing enemy sentries to retreat.',
         board_size=6,
-        s_optimal=6,
-        pieces=[(5, 0, 0, 'H'), (0, 3, 1, 'E')],
-        optimal_path=[(5, 0), (4, 1), (3, 2), (2, 3), (2, 4), (1, 5), (0, 5)]
+        s_optimal=5,
+        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'A'), (0, 3, 1, 'E'), (1, 4, 1, 'A')],
+        optimal_path=[(5, 0), (4, 1), (3, 2), (2, 3), (1, 4), (0, 5)]
     ),
     'stage_6x6_04': PuzzleScenario(
         id_str='stage_6x6_04',
-        title='Stage 4: Twin Guards',
-        description='Two Elephants defend the lower perimeter. Advance through middle corridor.',
+        title='Stage 4: Sentry Gate',
+        description='Heavy Elephants defend perimeter. Use Elephant escort through the gap.',
         board_size=6,
         s_optimal=6,
-        pieces=[(5, 0, 0, 'H'), (1, 0, 1, 'E'), (2, 1, 1, 'E')],
+        pieces=[(5, 0, 0, 'H'), (4, 0, 0, 'E'), (1, 0, 1, 'E'), (2, 1, 1, 'E'), (3, 3, 1, 'A')],
         optimal_path=[(5, 0), (4, 1), (4, 2), (3, 3), (2, 3), (1, 4), (0, 5)]
     ),
     'stage_6x6_05': PuzzleScenario(
         id_str='stage_6x6_05',
-        title='Stage 5: Vanguard Obstacle',
-        description='A heavy Elephant guards column 3. Detour safely around threat radius.',
+        title='Stage 5: Crossfire Defense',
+        description='Ant maneuvers around central Elephant threat to pierce defensive lines.',
         board_size=6,
-        s_optimal=6,
-        pieces=[(5, 0, 0, 'H'), (4, 3, 1, 'E')],
-        optimal_path=[(5, 0), (4, 0), (3, 1), (2, 2), (1, 3), (0, 4), (0, 5)]
+        s_optimal=7,
+        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'A'), (3, 2, 1, 'E'), (2, 4, 1, 'H')],
+        optimal_path=[(5, 1), (4, 2), (4, 3), (3, 4), (2, 5), (1, 5), (0, 5)]
     ),
     'stage_6x6_06': PuzzleScenario(
         id_str='stage_6x6_06',
         title='Stage 6: The Chokepoint',
-        description='Mixed defender positions force precise diagonal stepping without stalling.',
+        description='Elephant escort anchors the center while advancing toward objective.',
         board_size=6,
         s_optimal=6,
-        pieces=[(5, 0, 0, 'H'), (3, 3, 1, 'H'), (0, 4, 1, 'A'), (3, 1, 1, 'H'), (0, 3, 1, 'E')],
-        optimal_path=[(5, 0), (4, 1), (3, 2), (2, 3), (2, 4), (1, 5), (0, 5)]
+        pieces=[(5, 0, 0, 'H'), (4, 1, 0, 'E'), (2, 2, 1, 'E'), (2, 4, 1, 'A')],
+        optimal_path=[(4, 1), (3, 2), (2, 3), (1, 4), (0, 4), (0, 5)]
     ),
     'stage_6x6_07': PuzzleScenario(
         id_str='stage_6x6_07',
         title='Stage 7: The Ridge',
-        description='Elephant and Ant pairing cuts off direct lines, forcing a 7-step detour.',
+        description='Elephant pushes through outer corridor to bypass layered barricade.',
         board_size=6,
         s_optimal=7,
-        pieces=[(5, 0, 0, 'H'), (3, 3, 1, 'E'), (3, 2, 1, 'A')],
-        optimal_path=[(5, 0), (4, 0), (3, 0), (2, 1), (1, 2), (0, 3), (0, 4), (0, 5)]
+        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (3, 2, 1, 'E'), (2, 3, 1, 'E'), (2, 4, 1, 'A')],
+        optimal_path=[(5, 1), (4, 1), (3, 1), (2, 2), (1, 3), (0, 4), (0, 5)]
     ),
     'stage_6x6_08': PuzzleScenario(
         id_str='stage_6x6_08',
-        title='Stage 8: Flank Patrol',
-        description='Center square guarded by Elephant. Use outer perimeter to reach target.',
+        title='Stage 8: Patrol Infiltration',
+        description='Elephant squad threads between patrol zones along the edge.',
         board_size=6,
-        s_optimal=8,
-        pieces=[(5, 0, 0, 'H'), (2, 3, 1, 'E')],
-        optimal_path=[(5, 0), (4, 0), (3, 0), (2, 0), (1, 1), (0, 2), (0, 3), (0, 4), (0, 5)]
+        s_optimal=6,
+        pieces=[(5, 0, 0, 'H'), (4, 0, 0, 'E'), (3, 2, 1, 'E'), (2, 3, 1, 'E'), (1, 3, 1, 'E'), (2, 5, 1, 'A')],
+        optimal_path=[(4, 0), (3, 1), (2, 2), (1, 3), (0, 4), (0, 5)]
     ),
     'stage_6x6_09': PuzzleScenario(
         id_str='stage_6x6_09',
-        title='Stage 9: Outer Corridor',
-        description='Two Elephants block corner quadrants, requiring a wide 8-move loop.',
+        title='Stage 9: Corridor Sweep',
+        description='Double defender line blocks diagonal. Navigate around outer perimeter.',
         board_size=6,
-        s_optimal=8,
-        pieces=[(5, 0, 0, 'H'), (3, 2, 1, 'A'), (5, 2, 1, 'E'), (1, 3, 1, 'E')],
-        optimal_path=[(5, 0), (4, 0), (3, 1), (3, 2), (3, 3), (3, 4), (2, 5), (1, 5), (0, 5)]
+        s_optimal=6,
+        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (3, 2, 1, 'E'), (2, 3, 1, 'E'), (1, 4, 1, 'E'), (2, 5, 1, 'A')],
+        optimal_path=[(5, 1), (4, 1), (3, 1), (2, 2), (1, 3), (0, 4), (0, 5)]
     ),
     'stage_6x6_10': PuzzleScenario(
         id_str='stage_6x6_10',
-        title='Stage 10: The Labyrinth',
-        description='High-level multi-unit obstacle demanding a full 9-step edge navigation.',
+        title='Stage 10: The Citadel',
+        description='Full multi-piece tactical engagement demanding optimal piece synergy.',
         board_size=6,
-        s_optimal=9,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 1, 'H'), (0, 2, 1, 'E'), (3, 3, 1, 'E')],
-        optimal_path=[(5, 0), (4, 1), (5, 2), (5, 3), (5, 4), (4, 5), (3, 5), (2, 5), (1, 4), (0, 5)]
+        s_optimal=7,
+        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 0, 0, 'A'), (3, 3, 1, 'E'), (2, 3, 1, 'E'), (1, 4, 1, 'E'), (2, 4, 1, 'A'), (3, 1, 1, 'H')],
+        optimal_path=[(5, 1), (4, 1), (3, 0), (2, 1), (1, 2), (0, 3), (0, 5)]
     )
 }
 
@@ -202,21 +230,21 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
 PRECONFIGURED_STAGES_9X9: Dict[str, PuzzleScenario] = {
     'p10_proposal': PuzzleScenario(
         id_str='p10_proposal',
-        title='Proposal Benchmark (10-Step Optimal - 9x9)',
-        description='Standard 10-step optimal puzzle as specified in the proposal. AI acts as Optimal Defender.',
+        title='Proposal Benchmark (9x9)',
+        description='Multi-piece 9x9 tactical engagement. AI acts as Optimal Defender.',
         board_size=9,
-        s_optimal=10,
-        pieces=[(8, 0, 0, 'H'), (2, 2, 1, 'A'), (2, 5, 1, 'E'), (4, 3, 1, 'E'), (6, 6, 1, 'H')],
-        optimal_path=[(8, 0), (7, 1), (6, 2), (5, 3), (4, 4), (4, 5), (4, 6), (3, 7), (2, 7), (1, 7), (0, 8)]
+        s_optimal=8,
+        pieces=[(8, 0, 0, 'H'), (8, 1, 0, 'E'), (7, 0, 0, 'A'), (2, 2, 1, 'A'), (2, 5, 1, 'E'), (4, 3, 1, 'E'), (6, 6, 1, 'H')],
+        optimal_path=[(8, 0), (7, 1), (6, 2), (5, 3), (4, 4), (3, 5), (2, 6), (1, 7), (0, 8)]
     ),
     'p12_labyrinth': PuzzleScenario(
         id_str='p12_labyrinth',
-        title='Grand Labyrinth (12-Step Optimal - 9x9)',
-        description='Extended defense perimeter requiring complex evasive pathing.',
+        title='Grand Labyrinth (9x9)',
+        description='Extended defense perimeter requiring cooperative piece maneuvering.',
         board_size=9,
-        s_optimal=12,
-        pieces=[(8, 0, 0, 'H'), (8, 2, 1, 'E'), (8, 3, 1, 'A'), (3, 5, 1, 'E'), (5, 2, 1, 'E')],
-        optimal_path=[(8, 0), (7, 0), (6, 0), (5, 0), (4, 0), (3, 1), (2, 2), (1, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 8)]
+        s_optimal=10,
+        pieces=[(8, 0, 0, 'H'), (8, 2, 0, 'E'), (7, 0, 0, 'A'), (8, 3, 1, 'A'), (3, 5, 1, 'E'), (5, 2, 1, 'E')],
+        optimal_path=[(8, 0), (7, 0), (6, 0), (5, 0), (4, 0), (3, 1), (2, 2), (1, 3), (0, 4), (0, 6), (0, 8)]
     )
 }
 
@@ -240,18 +268,30 @@ def get_all_puzzles() -> Dict[str, PuzzleScenario]:
     return all_puzzles
 
 
-def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps: int = 10, max_attempts: int = 500) -> PuzzleScenario:
+def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps: int = 9, max_attempts: int = 500) -> PuzzleScenario:
     """
     Algorithmically generates a guaranteed winnable puzzle scenario on N x N board.
-    Runs BFS safe path solver to ensure a valid optimal path exists without unavoidable traps.
+    Places a balanced squadron of player pieces and tactical AI defenders,
+    verified via BFS solver to guarantee at least one safe winning path.
     """
     start_coord = (board_size - 1, 0)
     target_coord = (0, board_size - 1)
 
     for attempt in range(max_attempts):
-        num_defs = random.randint(1, 4 if board_size == 6 else 6)
-        defs = []
         occupied_set = {start_coord, target_coord}
+
+        # Player squad: Human at start corner, plus 1 or 2 supporting pieces
+        player_pieces = [(start_coord[0], start_coord[1], 0, 'H')]
+        support_positions = [(board_size - 1, 1), (board_size - 2, 0), (board_size - 2, 1)]
+        random.shuffle(support_positions)
+
+        for pos in support_positions[:2]:
+            occupied_set.add(pos)
+            player_pieces.append((pos[0], pos[1], 0, random.choice(['E', 'A'])))
+
+        # AI defender squad
+        num_defs = random.randint(2, 4 if board_size == 6 else 6)
+        defs = []
 
         for _ in range(num_defs):
             r = random.randint(0, board_size - 1)
@@ -260,13 +300,13 @@ def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps:
                 occupied_set.add((r, c))
                 defs.append((r, c, 1, random.choice(['E', 'A', 'H'])))
 
-        pieces = [(start_coord[0], start_coord[1], 0, 'H')] + defs
-        d, path = bfs_safe_path(board_size, pieces, start_coord, target_coord, 'H')
+        pieces = player_pieces + defs
+        d, path, best_pc = find_optimal_winning_path(board_size, pieces, target_coord)
 
         if d is not None and min_steps <= d <= max_steps:
             return PuzzleScenario(
                 id_str=f"random_{board_size}x{board_size}_{int(time.time()*1000)%100000}",
-                title=f"Random Winnable Challenge ({d} Steps)",
+                title=f"Random Challenge ({d} Steps)",
                 description=f"Generated {board_size}x{board_size} scenario with mathematically verified {d}-step solution.",
                 board_size=board_size,
                 s_optimal=d,
@@ -274,6 +314,8 @@ def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps:
                 optimal_path=path,
                 is_custom=False
             )
+
+    return PRECONFIGURED_STAGES_6X6['stage_6x6_01']
 
     # Fallback to verified preset stage 5
     return PRECONFIGURED_STAGES_6X6['stage_6x6_05']
