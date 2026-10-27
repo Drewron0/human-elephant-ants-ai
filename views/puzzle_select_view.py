@@ -253,12 +253,23 @@ class PuzzleSelectView(tk.Frame):
         elif self.active_category == "custom":
             puzzles = [p for p in get_all_puzzles().values() if p.is_custom]
         else:
+            loading_label = tk.Label(
+                self.scrollable_grid, text="Creating Random Challenge.....",
+                font=(FONT_NAME, 11), bg=THEME['bg'], fg=THEME['text_muted']
+            )
+            loading_label.grid(row=0, column=0, columnspan=3, pady=40)
+            self.grid_canvas.yview_moveto(0)
+            # Paint the selected tab and message before the synchronous search starts.
+            self.update_idletasks()
             # Random winnable: provide 3 dynamically generated winnable puzzles
-            puzzles = [
-                generate_winnable_puzzle(board_size=6, min_steps=5, max_steps=7),
-                generate_winnable_puzzle(board_size=6, min_steps=6, max_steps=8),
-                generate_winnable_puzzle(board_size=6, min_steps=7, max_steps=10)
-            ]
+            try:
+                puzzles = [
+                    generate_winnable_puzzle(board_size=6, min_steps=5, max_steps=7),
+                    generate_winnable_puzzle(board_size=6, min_steps=6, max_steps=8),
+                    generate_winnable_puzzle(board_size=6, min_steps=7, max_steps=10)
+                ]
+            finally:
+                loading_label.destroy()
 
         if not puzzles:
             msg_frame = tk.Frame(self.scrollable_grid, bg=THEME['bg'])
