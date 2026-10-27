@@ -97,6 +97,26 @@ def setup_ttk_styles(root: tk.Tk):
         foreground=[('selected', '#FFFFFF')]
     )
 
+    # Dark Scrollbar Styling
+    style.configure(
+        'Vertical.TScrollbar',
+        background=THEME['surface_light'],
+        darkcolor=THEME['surface'],
+        lightcolor=THEME['surface'],
+        troughcolor=THEME['surface'],
+        bordercolor=THEME['surface'],
+        arrowcolor=THEME['text_muted']
+    )
+    style.configure(
+        'Horizontal.TScrollbar',
+        background=THEME['surface_light'],
+        darkcolor=THEME['surface'],
+        lightcolor=THEME['surface'],
+        troughcolor=THEME['surface'],
+        bordercolor=THEME['surface'],
+        arrowcolor=THEME['text_muted']
+    )
+
 
 def draw_star(canvas: tk.Canvas, cx: float, cy: float, radius: float, fill: str, outline: str = ''):
     points = []
@@ -173,8 +193,8 @@ class ButtonPrimary(tk.Button):
             bd=0,
             relief=tk.FLAT,
             cursor='hand2',
-            padx=14,
-            pady=7,
+            padx=12,
+            pady=6,
             width=width,
             **kwargs
         )

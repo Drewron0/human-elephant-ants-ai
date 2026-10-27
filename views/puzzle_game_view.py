@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 from typing import Dict, Any, Optional, Tuple, List
 import time
 
@@ -44,6 +45,7 @@ class PuzzleGameView(tk.Frame):
         self.is_game_active = True
         self.ai_timer_id: Optional[str] = None
         self.start_time = time.time()
+        self._resize_job = None
 
         # Canvas dynamic sizing
         self.current_sq_size: int = 80
@@ -69,7 +71,7 @@ class PuzzleGameView(tk.Frame):
 
         tk.Label(
             title_box,
-            text=f"— S_optimal: {self.session.s_optimal} steps • Step Limit: {self.session.s_max} moves",
+            text=f"- Optimal Steps: {self.session.s_optimal} | Move Limit: {self.session.s_max}",
             font=(FONT_NAME, 9),
             bg=THEME['surface'],
             fg=THEME['text_muted']
@@ -108,7 +110,7 @@ class PuzzleGameView(tk.Frame):
         self.paned.add(self.sidebar_pane, minsize=300, stretch="never")
 
         sidebar_scroll_canvas = tk.Canvas(self.sidebar_pane, bg=THEME['surface'], highlightthickness=0)
-        scroll_y = tk.Scrollbar(self.sidebar_pane, orient=tk.VERTICAL, command=sidebar_scroll_canvas.yview)
+        scroll_y = ttk.Scrollbar(self.sidebar_pane, orient=tk.VERTICAL, command=sidebar_scroll_canvas.yview)
         content = tk.Frame(sidebar_scroll_canvas, bg=THEME['surface'], padx=14, pady=12)
 
         content.bind(
@@ -149,12 +151,12 @@ class PuzzleGameView(tk.Frame):
         self.lbl_steps = tk.Label(s_row, text=f"Steps: 0 / {self.session.s_optimal}", font=(FONT_NAME, 10, "bold"), bg=THEME['surface_light'], fg=THEME['text'])
         self.lbl_steps.pack(side=tk.LEFT)
 
-        self.lbl_delay = tk.Label(s_row, text="Delay: ΔS = 0", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_light'], fg=THEME['success'])
+        self.lbl_delay = tk.Label(s_row, text="Delay: 0 moves", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_light'], fg=THEME['success'])
         self.lbl_delay.pack(side=tk.RIGHT)
 
         st_row = tk.Frame(strat_card, bg=THEME['surface_light'])
         st_row.pack(fill=tk.X, pady=(3, 0))
-        self.lbl_sub_stats = tk.Label(st_row, text="Resets: 0 • Undos: 0", font=(FONT_NAME, 8), bg=THEME['surface_light'], fg=THEME['text_muted'])
+        self.lbl_sub_stats = tk.Label(st_row, text="Resets: 0 | Undos: 0", font=(FONT_NAME, 8), bg=THEME['surface_light'], fg=THEME['text_muted'])
         self.lbl_sub_stats.pack(side=tk.LEFT)
 
         self.lbl_status = tk.Label(st_row, text="ON TRACK", font=(FONT_NAME, 8, "bold"), bg=THEME['surface_light'], fg=THEME['accent'])
@@ -170,7 +172,7 @@ class PuzzleGameView(tk.Frame):
             self.lbl_ai_action = tk.Label(self.ai_metrics_card, text="Last Action A = None", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text'])
             self.lbl_ai_action.pack(anchor="w")
 
-            self.lbl_ai_metrics = tk.Label(self.ai_metrics_card, text="Latency: -- • Prune: 0.0%", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'])
+            self.lbl_ai_metrics = tk.Label(self.ai_metrics_card, text="Latency: -- | Prune: 0.0%", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'])
             self.lbl_ai_metrics.pack(anchor="w", pady=(2, 0))
         else:
             self.ai_metrics_card = None
@@ -181,7 +183,7 @@ class PuzzleGameView(tk.Frame):
         notation_box.pack(fill=tk.X, pady=(3, 8))
         notation_box.pack_propagate(False)
 
-        hist_scroll = tk.Scrollbar(notation_box)
+        hist_scroll = ttk.Scrollbar(notation_box)
         hist_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.list_notation = tk.Listbox(
@@ -222,9 +224,18 @@ class PuzzleGameView(tk.Frame):
             self.app.unbind(h['seq'])
 
     def _on_board_container_resize(self, event):
-        """Dynamically adjusts square size and canvas dimensions to fit the container."""
-        avail_w = event.width - 24
-        avail_h = event.height - 24
+        """Dynamically adjusts square size and canvas dimensions to fit the container with debouncing."""
+        if self._resize_job is not None:
+            try:
+                self.after_cancel(self._resize_job)
+            except Exception:
+                pass
+        self._resize_job = self.after(20, lambda w=event.width, h=event.height: self._apply_board_resize(w, h))
+
+    def _apply_board_resize(self, width: int, height: int):
+        self._resize_job = None
+        avail_w = width - 24
+        avail_h = height - 24
         dim = max(300, min(avail_w, avail_h, 700))
         size = self.state.board_size
         new_sq_size = dim // size
@@ -417,12 +428,12 @@ class PuzzleGameView(tk.Frame):
 
         delta = self.session.delay_margin
         if delta == 0:
-            self.lbl_delay.config(text="Delay: ΔS = 0 (Optimal)", fg=THEME['success'])
+            self.lbl_delay.config(text="Delay: 0 moves (Optimal)", fg=THEME['success'])
         else:
-            self.lbl_delay.config(text=f"Delay: ΔS = +{delta}", fg=THEME['warning'])
+            self.lbl_delay.config(text=f"Delay: +{delta} moves", fg=THEME['warning'])
 
         self.lbl_sub_stats.config(
-            text=f"Resets: {self.session.resets_count} • Undos: {self.session.undo_count}"
+            text=f"Resets: {self.session.resets_count} | Undos: {self.session.undo_count}"
         )
 
         status = self.session.evaluate_status(self.state)
@@ -441,12 +452,18 @@ class PuzzleGameView(tk.Frame):
             score = last['eval_score']
             size = self.state.board_size
             act_str = f"{chr(65 + act[0][1])}{size - act[0][0]} -> {chr(65 + act[1][1])}{size - act[1][0]}"
-            self.lbl_ai_action.config(text=f"Action A: {act_str} • Score: {score:.1f}")
+            if score <= -90000:
+                score_str = "Neutralized"
+            elif score >= 90000:
+                score_str = "Breakthrough"
+            else:
+                score_str = f"{score:+.1f}"
+            self.lbl_ai_action.config(text=f"Action: {act_str} | Eval: {score_str}")
 
             t = last['t_turn']
             prune = last['prune_efficiency']
             self.lbl_ai_metrics.config(
-                text=f"Latency: {t:.3f}s (≤2.0s) • Prune: {prune:.1f}%"
+                text=f"Latency: {t:.3f}s (<=2.0s) | Prune: {prune:.1f}%"
             )
 
         # Move History
@@ -520,7 +537,7 @@ class PuzzleGameView(tk.Frame):
             summary = (
                 f"You reached the corner in {self.session.current_attempt_steps} steps "
                 f"(Optimal: {self.session.s_optimal}).\n"
-                f"Forced Delay Margin ΔS: +{self.session.delay_margin} moves • Time: {time_spent}s."
+                f"Forced Delay Margin: +{self.session.delay_margin} moves | Time: {time_spent}s."
             )
         else:
             tk.Label(
@@ -567,7 +584,7 @@ class PuzzleGameView(tk.Frame):
 
         tk.Label(
             box,
-            text=f"Resets: {self.session.resets_count} • Undos Used: {self.session.undo_count}",
+            text=f"Resets: {self.session.resets_count} | Undos Used: {self.session.undo_count}",
             font=(FONT_NAME, 8),
             bg=THEME['surface_light'],
             fg=THEME['text_muted']
@@ -589,8 +606,8 @@ class PuzzleGameView(tk.Frame):
         modal = ThemedModal(self, "Rules and Movement", min_width=480)
         content = (
             "1. Objective:\n"
-            f"   Navigate your piece to the opponent's star corner within S_max={self.session.s_max} moves.\n"
-            f"   The optimal path takes exactly S_optimal={self.session.s_optimal} steps.\n\n"
+            f"   Navigate your piece to the opponent's star corner within Move Limit={self.session.s_max} moves.\n"
+            f"   The optimal path takes {self.session.s_optimal} steps.\n\n"
             "2. Combat Hierarchy:\n"
             "   Elephant (E) defeats Human (H)\n"
             "   Human (H) defeats Ant (A)\n"
@@ -616,6 +633,12 @@ class PuzzleGameView(tk.Frame):
         self.app.show_view('puzzle_select')
 
     def _cleanup(self):
+        if self._resize_job is not None:
+            try:
+                self.after_cancel(self._resize_job)
+            except Exception:
+                pass
+            self._resize_job = None
         self._unbind_hotkeys()
         if self.ai_timer_id:
             self.after_cancel(self.ai_timer_id)

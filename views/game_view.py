@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 from typing import Dict, Any, Optional, Tuple, List
 from ui_theme import (
     THEME, FONT_NAME, HOTKEYS, ButtonPrimary, ButtonSecondary, ButtonDanger,
@@ -29,6 +30,7 @@ class GameView(tk.Frame):
         self.timer_id: Optional[str] = None
         self.ai_timer_id: Optional[str] = None
         self.is_game_active = True
+        self._resize_job = None
 
         # Canvas dynamic sizing
         self.current_sq_size: int = 72
@@ -129,7 +131,7 @@ class GameView(tk.Frame):
         notation_container.pack(fill=tk.X, pady=(4, 10))
         notation_container.pack_propagate(False)
 
-        scroll = tk.Scrollbar(notation_container)
+        scroll = ttk.Scrollbar(notation_container)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.list_notation = tk.Listbox(
             notation_container,
@@ -213,9 +215,18 @@ class GameView(tk.Frame):
         return f"{m:02d}:{s:02d}"
 
     def _on_board_container_resize(self, event):
-        """Dynamically adjusts square size and canvas dimensions to fit the container."""
-        avail_w = event.width - 24
-        avail_h = event.height - 24
+        """Dynamically adjusts square size and canvas dimensions to fit the container with debouncing."""
+        if self._resize_job is not None:
+            try:
+                self.after_cancel(self._resize_job)
+            except Exception:
+                pass
+        self._resize_job = self.after(20, lambda w=event.width, h=event.height: self._apply_board_resize(w, h))
+
+    def _apply_board_resize(self, width: int, height: int):
+        self._resize_job = None
+        avail_w = width - 24
+        avail_h = height - 24
         dim = max(360, min(avail_w, avail_h, 750))
         size = self.state.board_size
         new_sq_size = dim // size
@@ -744,6 +755,12 @@ class GameView(tk.Frame):
         self.lbl_p2_name.config(text=name)
 
     def _cleanup(self):
+        if self._resize_job is not None:
+            try:
+                self.after_cancel(self._resize_job)
+            except Exception:
+                pass
+            self._resize_job = None
         self._stop_timer()
         self._unbind_hotkeys()
         if self.network_mgr:
