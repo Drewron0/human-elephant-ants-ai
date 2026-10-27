@@ -434,11 +434,6 @@ def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps:
     return PRECONFIGURED_STAGES_6X6['stage_6x6_01']
 
 
-def generate_procedural_puzzle(target_steps: int = 10, board_size: int = 9) -> PuzzleScenario:
-    """Alias for backwards compatibility with previous caller."""
-    return generate_winnable_puzzle(board_size=board_size, min_steps=target_steps, max_steps=target_steps)
-
-
 class PuzzleSession:
     """
     Session Telemetry Manager:

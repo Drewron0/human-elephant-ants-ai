@@ -1,4 +1,3 @@
-import copy
 from typing import List, Tuple, Optional, Dict, Any
 
 PIECE_NAMES = {
@@ -25,25 +24,12 @@ TARGET_CORNERS = {
     1: (8, 0)   # Player 2 (top) target is bottom-left corner
 }
 
-START_CORNERS = {
-    0: (8, 0),  # Player 1 starts around bottom-left
-    1: (0, 8)   # Player 2 starts around top-right
-}
-
-
 class Piece:
     __slots__ = ('owner', 'p_type')
 
     def __init__(self, owner: int, p_type: str):
         self.owner = owner  # 0: Player 1, 1: Player 2
         self.p_type = p_type  # 'H', 'E', 'A'
-
-    def can_capture(self, target: 'Piece') -> bool:
-        if target is None:
-            return True
-        if target.owner == self.owner:
-            return False
-        return BEATS.get(self.p_type) == target.p_type
 
     def to_dict(self) -> Dict[str, Any]:
         return {'owner': self.owner, 'p_type': self.p_type}

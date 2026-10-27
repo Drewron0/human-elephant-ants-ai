@@ -161,11 +161,6 @@ def get_stage_leaderboard(stage_id: str) -> List[Dict[str, Any]]:
     ))
 
 
-def get_all_stage_leaderboards() -> Dict[str, List[Dict[str, Any]]]:
-    db = _load_json(DB_FILE, {"pve": [], "pvp": {}, "stages": {}})
-    return db.get("stages", {})
-
-
 def clear_stage_leaderboard(stage_id: Optional[str] = None) -> None:
     db = _load_json(DB_FILE, {"pve": [], "pvp": {}, "stages": {}})
     if stage_id:
@@ -225,11 +220,6 @@ def save_game_slot(slot_id: str, slot_name: str, payload: Dict[str, Any]) -> Non
 
 def get_saved_slots() -> Dict[str, Dict[str, Any]]:
     return _load_json(SAVES_FILE, {})
-
-
-def load_game_slot(slot_id: str) -> Optional[Dict[str, Any]]:
-    saves = _load_json(SAVES_FILE, {})
-    return saves.get(slot_id)
 
 
 def delete_game_slot(slot_id: str) -> bool:

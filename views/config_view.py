@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Dict, Any
 from ui_theme import THEME, FONT_NAME, COLOR_PALETTES, ButtonPrimary, ButtonSecondary, SegmentedControl
-from ai_engine import DEFAULT_PROPOSAL_WEIGHTS
 import storage
 
 
@@ -17,9 +16,7 @@ class ConfigView(tk.Frame):
         container = tk.Frame(self, bg=THEME['bg'])
         container.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
-        if self.mode == 'Puzzle':
-            mode_title = "Puzzle Mode (Chess-Sut Defender)"
-        elif self.mode == 'PvE':
+        if self.mode == 'PvE':
             mode_title = "Player vs AI (PvE)"
         else:
             mode_title = "Player vs Player (PvP)"
@@ -49,8 +46,7 @@ class ConfigView(tk.Frame):
         entry_font = (FONT_NAME, 9)
 
         # Player 1 Profile
-        p1_lbl = "Player Name:" if self.mode == 'Puzzle' else "Player 1 Name:"
-        tk.Label(card, text=p1_lbl, font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
+        tk.Label(card, text="Player 1 Name:", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
         p1_box = tk.Frame(card, bg=THEME['surface'])
         p1_box.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)
 
@@ -76,51 +72,7 @@ class ConfigView(tk.Frame):
         )
         chk_p1_guest.pack(side=tk.LEFT, padx=(8, 0))
 
-        if self.mode == 'Puzzle':
-            # ================= PUZZLE MODE SETTINGS =================
-            # Puzzle Scenario Selector
-            row += 1
-            tk.Label(card, text="Puzzle Scenario:", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
-            self.var_scenario = tk.StringVar(value="Proposal Benchmark (10-Step Optimal - 9x9)")
-            scenario_values = [
-                "Proposal Benchmark (10-Step Optimal - 9x9)",
-                "Tactical Sprint (6-Step Optimal - 6x6)",
-                "Flank Corridor (8-Step Optimal - 6x6)",
-                "Grand Labyrinth (12-Step Optimal - 9x9)",
-                "Procedural 10-Step Random Puzzle"
-            ]
-            self.cb_scenario = ttk.Combobox(card, textvariable=self.var_scenario, values=scenario_values, state="readonly", width=36, font=entry_font)
-            self.cb_scenario.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)
-            self.cb_scenario.bind("<<ComboboxSelected>>", self._on_scenario_change)
-
-            # AI Defender Agent Selector (Table 3)
-            row += 1
-            tk.Label(card, text="AI Defender Model:", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
-            self.var_defender_model = tk.StringVar(value="Proposed Method (Alpha-Beta d=6, Non-Transitive E(s))")
-            agent_values = [
-                "Proposed Method (Alpha-Beta d=6, Non-Transitive E(s))",
-                "Proposed Method (Alpha-Beta d=3, Baseline Comparison)",
-                "Baseline 2: Vanilla Minimax (d=3, Static Material, No Pruning)",
-                "Baseline 1: Random Move Agent"
-            ]
-            cb_defender = ttk.Combobox(card, textvariable=self.var_defender_model, values=agent_values, state="readonly", width=36, font=entry_font)
-            cb_defender.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)
-
-            # Search Horizon Depth Limit (d_max)
-            row += 1
-            tk.Label(card, text="Search Horizon (d_max):", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
-            self.var_depth = tk.StringVar(value="Depth 6 (Proposal Main)")
-            cb_depth = ttk.Combobox(card, textvariable=self.var_depth, values=["Depth 6 (Proposal Main)", "Depth 5", "Depth 4", "Depth 3 (Baseline Comparison)"], state="readonly", width=22, font=entry_font)
-            cb_depth.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)
-
-            # Board Size
-            row += 1
-            tk.Label(card, text="Board Dimension (NxN):", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
-            self.var_board_size = tk.StringVar(value="9x9 Board")
-            self.cb_board_size = ttk.Combobox(card, textvariable=self.var_board_size, values=["9x9 Board", "6x6 Board"], state="readonly", width=16, font=entry_font)
-            self.cb_board_size.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)
-
-        elif self.mode == 'PvP':
+        if self.mode == 'PvP':
             # ================= PVP MODE SETTINGS =================
             row += 1
             self.lbl_p2_title = tk.Label(card, text="Player 2 Name:", font=lbl_font, bg=THEME['surface'], fg=THEME['text'])
@@ -216,20 +168,19 @@ class ConfigView(tk.Frame):
             )
             self.seg_difficulty.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)
 
-        # Time Limit (Only for PvP and PvE)
-        if self.mode != 'Puzzle':
-            row += 1
-            tk.Label(card, text="Timer Per Side:", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
-            self.var_time = tk.StringVar(value="2 Minutes")
-            cb_time = ttk.Combobox(
-                card,
-                textvariable=self.var_time,
-                values=["1 Minute", "2 Minutes", "3 Minutes", "5 Minutes", "10 Minutes", "No Timer"],
-                state="readonly",
-                width=16,
-                font=entry_font
-            )
-            cb_time.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)
+        # Time Limit
+        row += 1
+        tk.Label(card, text="Timer Per Side:", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
+        self.var_time = tk.StringVar(value="2 Minutes")
+        cb_time = ttk.Combobox(
+            card,
+            textvariable=self.var_time,
+            values=["1 Minute", "2 Minutes", "3 Minutes", "5 Minutes", "10 Minutes", "No Timer"],
+            state="readonly",
+            width=16,
+            font=entry_font
+        )
+        cb_time.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)
 
         # Allow Undo
         row += 1
@@ -250,15 +201,14 @@ class ConfigView(tk.Frame):
 
         # Player 1 Color
         row += 1
-        p1_col_lbl = "Player Color:" if self.mode == 'Puzzle' else "Player 1 Color:"
-        tk.Label(card, text=p1_col_lbl, font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
+        tk.Label(card, text="Player 1 Color:", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
         self.var_p1_color = tk.StringVar(value="Emerald Green")
         cb_p1 = ttk.Combobox(card, textvariable=self.var_p1_color, values=list(COLOR_PALETTES.keys()), state="readonly", width=16, font=entry_font)
         cb_p1.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)
 
         # Player 2 / AI Color
         row += 1
-        p2_lbl = "AI Color:" if self.mode in ('PvE', 'Puzzle') else "Player 2 Color:"
+        p2_lbl = "AI Color:" if self.mode == 'PvE' else "Player 2 Color:"
         tk.Label(card, text=p2_lbl, font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
         self.var_p2_color = tk.StringVar(value="Ruby Red")
         cb_p2 = ttk.Combobox(card, textvariable=self.var_p2_color, values=list(COLOR_PALETTES.keys()), state="readonly", width=16, font=entry_font)
@@ -270,15 +220,7 @@ class ConfigView(tk.Frame):
         btn_box.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(16, 4))
 
         ButtonSecondary(btn_box, text="Back to Hub", command=lambda: self.app.show_view('menu')).pack(side=tk.LEFT)
-        btn_start_text = "Start Puzzle Match" if self.mode == 'Puzzle' else "Start Game"
-        ButtonPrimary(btn_box, text=btn_start_text, command=self._start_game).pack(side=tk.RIGHT)
-
-    def _on_scenario_change(self, event=None):
-        scen = self.var_scenario.get()
-        if "6x6" in scen:
-            self.var_board_size.set("6x6 Board")
-        else:
-            self.var_board_size.set("9x9 Board")
+        ButtonPrimary(btn_box, text="Start Game", command=self._start_game).pack(side=tk.RIGHT)
 
     def _toggle_p1_guest(self):
         if self.var_p1_guest.get():
@@ -315,62 +257,6 @@ class ConfigView(tk.Frame):
 
         p1_color = COLOR_PALETTES.get(self.var_p1_color.get(), '#2ECC71')
         p2_color = COLOR_PALETTES.get(self.var_p2_color.get(), '#E74C3C')
-
-        if self.mode == 'Puzzle':
-            scen_val = self.var_scenario.get()
-            if "Proposal Benchmark" in scen_val:
-                scen_key = 'p10_proposal'
-            elif "Tactical Sprint" in scen_val:
-                scen_key = 'p6_rush'
-            elif "Flank Corridor" in scen_val:
-                scen_key = 'p8_flank'
-            elif "Grand Labyrinth" in scen_val:
-                scen_key = 'p12_labyrinth'
-            else:
-                scen_key = 'procedural'
-
-            agent_val = self.var_defender_model.get()
-            if "Alpha-Beta d=6" in agent_val:
-                agent_model = 'proposed_d6'
-                depth = 6
-            elif "Alpha-Beta d=3" in agent_val:
-                agent_model = 'proposed_d3'
-                depth = 3
-            elif "Baseline 2" in agent_val or "Vanilla" in agent_val:
-                agent_model = 'baseline_2_vanilla'
-                depth = 3
-            else:
-                agent_model = 'baseline_1_random'
-                depth = 1
-
-            depth_val = self.var_depth.get()
-            if "Depth 6" in depth_val:
-                depth = 6
-            elif "Depth 5" in depth_val:
-                depth = 5
-            elif "Depth 4" in depth_val:
-                depth = 4
-            elif "Depth 3" in depth_val:
-                depth = 3
-
-            b_size = 6 if "6x6" in self.var_board_size.get() else 9
-
-            config = {
-                'mode': 'Puzzle',
-                'p1_name': p1_val,
-                'is_guest_1': is_guest_1,
-                'puzzle_scenario': scen_key,
-                'agent_model': agent_model,
-                'agent_model_name': agent_val,
-                'search_depth': depth,
-                'board_size': b_size,
-                'weights': DEFAULT_PROPOSAL_WEIGHTS,
-                'undo_enabled': self.var_undo.get(),
-                'p1_color': p1_color,
-                'p2_color': p2_color
-            }
-            self.app.start_puzzle(config)
-            return
 
         # PvP or PvE setup
         time_map = {
@@ -421,7 +307,7 @@ class ConfigView(tk.Frame):
             'is_host': is_host,
             'ip': ip,
             'port': port,
-            'time_limit': time_map.get(self.var_time.get(), 120) if hasattr(self, 'var_time') else 120,
+            'time_limit': time_map.get(self.var_time.get(), 120),
             'undo_enabled': self.var_undo.get(),
             'p1_color': p1_color,
             'p2_color': p2_color
