@@ -53,7 +53,22 @@ class StageEditorView(tk.Frame):
         self._resize_job = None
 
         self._build_ui()
+        self._bind_shortcuts()
         self._verify_winnability(silent=True)
+
+    def _bind_shortcuts(self):
+        self.app.bind("<Key-1>", lambda e: self._set_tool('P0_H'))
+        self.app.bind("<Key-2>", lambda e: self._set_tool('P0_E'))
+        self.app.bind("<Key-3>", lambda e: self._set_tool('P0_A'))
+        self.app.bind("<Key-4>", lambda e: self._set_tool('P1_E'))
+        self.app.bind("<Key-5>", lambda e: self._set_tool('P1_H'))
+        self.app.bind("<Key-6>", lambda e: self._set_tool('P1_A'))
+        self.app.bind("<Key-7>", lambda e: self._set_tool('ERASER'))
+        self.app.bind("<Key-0>", lambda e: self._set_tool('ERASER'))
+
+    def _unbind_shortcuts(self):
+        for k in ["1", "2", "3", "4", "5", "6", "7", "0"]:
+            self.app.unbind(f"<Key-{k}>")
 
     def _build_ui(self):
         # Top Bar
@@ -91,6 +106,8 @@ class StageEditorView(tk.Frame):
         self.canvas = tk.Canvas(self.canvas_card, width=init_dim, height=init_dim, bg=THEME['bg'], highlightthickness=0)
         self.canvas.pack()
         self.canvas.bind("<Button-1>", self._on_canvas_click)
+        self.canvas.bind("<Button-2>", self._on_canvas_right_click)
+        self.canvas.bind("<Button-3>", self._on_canvas_right_click)
 
         # Right Controls & Palette Pane
         self.right_pane = tk.Frame(self.paned, bg=THEME['surface'], bd=0, highlightbackground=THEME['border'], highlightthickness=1)
@@ -111,7 +128,7 @@ class StageEditorView(tk.Frame):
         # Board Size Selection
         tk.Label(content, text="Board Size:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 2))
         self.var_size = tk.StringVar(value=f"{self.board_size}x{self.board_size}")
-        cb_size = ttk.Combobox(content, textvariable=self.var_size, values=["6x6", "9x9"], state="readonly", font=(FONT_NAME, 9))
+        cb_size = ttk.Combobox(content, textvariable=self.var_size, values=["6x6", "7x7", "8x8", "9x9"], state="readonly", font=(FONT_NAME, 9))
         cb_size.pack(fill=tk.X, pady=(0, 12))
         cb_size.bind("<<ComboboxSelected>>", self._on_size_change)
 
@@ -166,7 +183,19 @@ class StageEditorView(tk.Frame):
         ButtonSecondary(content, text="Reset to Default Squad", command=self._clear_board).pack(fill=tk.X, pady=(0, 4))
 
         if self.edit_stage_id:
-            ButtonDanger(content, text="Delete Stage", command=self._delete_stage).pack(fill=tk.X)
+            ButtonDanger(content, text="Delete Stage", command=self._delete_stage).pack(fill=tk.X, pady=(0, 4))
+
+        # Clean Hotkey Footer
+        footer = tk.Frame(content, bg=THEME['surface'], pady=6)
+        footer.pack(fill=tk.X, pady=(6, 0))
+        tk.Label(
+            footer,
+            text="Hotkeys: [1-3] Player Units  |  [4-6] AI Units  |  [7/0] Eraser\nRight-click: Quick Erase",
+            font=(FONT_NAME, 8),
+            bg=THEME['surface'],
+            fg=THEME['text_muted'],
+            justify="center"
+        ).pack(fill=tk.X)
 
         self._refresh_palette_highlight()
         self._draw_board()
@@ -177,7 +206,7 @@ class StageEditorView(tk.Frame):
                 self.after_cancel(self._resize_job)
             except Exception:
                 pass
-        self._resize_job = self.after(20, lambda w=event.width, h=event.height: self._apply_pane_resize(w, h))
+        self._resize_job = self.after(35, lambda w=event.width, h=event.height: self._apply_pane_resize(w, h))
 
     def _apply_pane_resize(self, width: int, height: int):
         self._resize_job = None
@@ -185,10 +214,12 @@ class StageEditorView(tk.Frame):
         new_sq = dim // self.board_size
         total_dim = new_sq * self.board_size
 
-        if new_sq != self.current_sq_size or self.canvas.winfo_width() != total_dim:
-            self.current_sq_size = new_sq
-            self.canvas.config(width=total_dim, height=total_dim)
-            self._draw_board()
+        if new_sq == self.current_sq_size and self.canvas.winfo_width() == total_dim:
+            return
+
+        self.current_sq_size = new_sq
+        self.canvas.config(width=total_dim, height=total_dim)
+        self._draw_board()
 
     def _set_tool(self, tool_code: str):
         self.active_tool = tool_code
@@ -204,14 +235,19 @@ class StageEditorView(tk.Frame):
 
     def _on_size_change(self, event=None):
         val = self.var_size.get()
-        new_size = 6 if "6x6" in val else 9
+        try:
+            new_size = int(val.split('x')[0])
+        except Exception:
+            new_size = 6
         if new_size != self.board_size:
             self.board_size = new_size
             self.placed_pieces = {k: v for k, v in self.placed_pieces.items() if k[0] < new_size and k[1] < new_size}
             start_coord = (self.board_size - 1, 0)
             if start_coord not in self.placed_pieces:
                 self.placed_pieces[start_coord] = (0, 'H')
-            self._draw_board()
+            w = max(440, self.left_pane.winfo_width())
+            h = max(440, self.left_pane.winfo_height())
+            self._apply_pane_resize(w, h)
             self._verify_winnability(silent=True)
 
     def _draw_board(self):
@@ -219,6 +255,7 @@ class StageEditorView(tk.Frame):
         size = self.board_size
         sq_size = self.current_sq_size
         target = (0, size - 1)
+        player_home = (size - 1, 0)
 
         for r in range(size):
             for c in range(size):
@@ -230,11 +267,15 @@ class StageEditorView(tk.Frame):
                 fill = THEME['board_light'] if (r + c) % 2 == 0 else THEME['board_dark']
                 if (r, c) == target:
                     fill = THEME['corner_p1']
+                elif (r, c) == player_home:
+                    fill = THEME['corner_p2']
 
                 self.canvas.create_rectangle(x0, y0, x1, y1, fill=fill, outline=THEME['board_grid'], width=1)
 
                 if (r, c) == target:
                     draw_star(self.canvas, (x0 + x1) / 2, (y0 + y1) / 2, max(6, sq_size * 0.3), fill='#F57F17', outline='')
+                elif (r, c) == player_home:
+                    draw_star(self.canvas, (x0 + x1) / 2, (y0 + y1) / 2, max(6, sq_size * 0.3), fill='#C62828', outline='')
 
                 if (r, c) in self.placed_pieces:
                     owner, pt = self.placed_pieces[(r, c)]
@@ -242,6 +283,20 @@ class StageEditorView(tk.Frame):
                     pad = max(4, sq_size // 8)
                     self.canvas.create_oval(x0 + pad, y0 + pad, x1 - pad, y1 - pad, fill=color, outline='#FFFFFF', width=2)
                     self.canvas.create_text((x0 + x1) // 2, (y0 + y1) // 2, text=pt, font=(FONT_NAME, max(9, sq_size // 4), "bold"), fill='#FFFFFF')
+
+    def _on_canvas_right_click(self, event):
+        size = self.board_size
+        sq_size = self.current_sq_size
+        c = event.x // sq_size
+        r = event.y // sq_size
+
+        if not (0 <= r < size and 0 <= c < size):
+            return
+
+        if (r, c) in self.placed_pieces:
+            del self.placed_pieces[(r, c)]
+            self._draw_board()
+            self._verify_winnability(silent=True)
 
     def _on_canvas_click(self, event):
         size = self.board_size
@@ -349,6 +404,7 @@ class StageEditorView(tk.Frame):
         ButtonDanger(modal.footer, text="Delete", command=confirm).pack(side=tk.RIGHT)
 
     def _cleanup(self):
+        self._unbind_shortcuts()
         if self._resize_job is not None:
             try:
                 self.after_cancel(self._resize_job)
