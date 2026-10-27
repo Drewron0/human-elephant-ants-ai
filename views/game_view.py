@@ -30,6 +30,9 @@ class GameView(tk.Frame):
         self.ai_timer_id: Optional[str] = None
         self.is_game_active = True
 
+        # Canvas dynamic sizing
+        self.current_sq_size: int = 72
+
         self._build_ui()
         self._bind_hotkeys()
         self._start_timer()
@@ -49,24 +52,34 @@ class GameView(tk.Frame):
 
         ButtonSecondary(top_bar, text="How to Play", command=self._show_rules_modal).pack(side=tk.RIGHT, padx=10, pady=4)
 
-        # Main Layout
-        main_layout = tk.Frame(self, bg=THEME['bg'])
-        main_layout.pack(fill=tk.BOTH, expand=True, padx=16, pady=(6, 12))
+        # Resizable PanedWindow: Board (Left) & Controls (Right)
+        self.paned = tk.PanedWindow(self, orient=tk.HORIZONTAL, bg=THEME['border'], sashrelief=tk.FLAT, sashwidth=4, bd=0)
+        self.paned.pack(fill=tk.BOTH, expand=True, padx=16, pady=(6, 12))
 
-        # Board Canvas (Left)
-        # 9 cells of 72px = 648px. Plus 30px coordinate margin on bottom and right = 678x678.
-        canvas_card = tk.Frame(main_layout, bg=THEME['surface'], bd=1, relief=tk.SOLID,
-                               highlightbackground=THEME['border'], highlightthickness=1, padx=8, pady=8)
-        canvas_card.pack(side=tk.LEFT, fill=tk.BOTH)
+        # Left Board Container (Adaptive & Resizable)
+        self.board_container = tk.Frame(self.paned, bg=THEME['bg'])
+        self.paned.add(self.board_container, minsize=420, stretch="always")
+        self.board_container.bind("<Configure>", self._on_board_container_resize)
 
-        self.canvas = tk.Canvas(canvas_card, width=678, height=678, bg=THEME['bg'], highlightthickness=0)
+        self.canvas_card = tk.Frame(
+            self.board_container,
+            bg=THEME['surface'],
+            bd=1,
+            relief=tk.SOLID,
+            highlightbackground=THEME['border'],
+            highlightthickness=1,
+            padx=6,
+            pady=6
+        )
+        self.canvas_card.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+
+        self.canvas = tk.Canvas(self.canvas_card, width=678, height=678, bg=THEME['surface'], highlightthickness=0)
         self.canvas.pack()
         self.canvas.bind("<Button-1>", self._on_board_click)
 
-        # Controls Panel (Right)
-        right_panel = tk.Frame(main_layout, bg=THEME['surface'], bd=1, relief=tk.SOLID,
-                               highlightbackground=THEME['border'], highlightthickness=1, padx=16, pady=14)
-        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(14, 0))
+        # Controls Panel (Right, Resizable)
+        right_panel = tk.Frame(self.paned, bg=THEME['surface'], bd=0, padx=16, pady=14)
+        self.paned.add(right_panel, minsize=320, stretch="never")
 
         # Player 2 Card
         p2_title = self.config.get('p2_name', 'Player 2')
@@ -120,9 +133,9 @@ class GameView(tk.Frame):
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.list_notation = tk.Listbox(
             notation_container,
-            bg='#1D1E26',
+            bg='#18181A',
             fg=THEME['text'],
-            font=("Consolas", 9),
+            font=(FONT_NAME, 9),
             bd=0,
             yscrollcommand=scroll.set,
             selectbackground=THEME['accent']
@@ -199,28 +212,43 @@ class GameView(tk.Frame):
         s = seconds % 60
         return f"{m:02d}:{s:02d}"
 
+    def _on_board_container_resize(self, event):
+        """Dynamically adjusts square size and canvas dimensions to fit the container."""
+        avail_w = event.width - 24
+        avail_h = event.height - 24
+        dim = max(360, min(avail_w, avail_h, 750))
+        size = self.state.board_size
+        new_sq_size = dim // size
+        total_canvas_dim = new_sq_size * size + 30
+
+        if new_sq_size != self.current_sq_size or self.canvas.winfo_width() != total_canvas_dim:
+            self.current_sq_size = new_sq_size
+            self.canvas.config(width=total_canvas_dim, height=total_canvas_dim)
+            self._draw_board()
+
     def _draw_board(self):
         self.canvas.delete("all")
-        sq_size = 72
-        board_dim = 9 * sq_size  # 648px
+        sq_size = self.current_sq_size
+        size = self.state.board_size
+        board_dim = size * sq_size
+        total_dim = board_dim + 30
 
-        self.canvas.create_rectangle(0, 0, 678, 678, fill=THEME['surface'], outline='')
+        self.canvas.create_rectangle(0, 0, total_dim, total_dim, fill=THEME['surface'], outline='')
 
         # Coordinates ONLY on BOTTOM (Letters A-I) and RIGHT (Numbers 9-1)
-        cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
-        for c in range(9):
+        for c in range(size):
             x = c * sq_size + sq_size // 2
             y = board_dim + 15
-            self.canvas.create_text(x, y, text=cols[c], font=(FONT_NAME, 9, "bold"), fill=THEME['text_muted'])
+            self.canvas.create_text(x, y, text=chr(65 + c), font=(FONT_NAME, 9, "bold"), fill=THEME['text_muted'])
 
-        for r in range(9):
+        for r in range(size):
             x = board_dim + 15
             y = r * sq_size + sq_size // 2
-            self.canvas.create_text(x, y, text=str(9 - r), font=(FONT_NAME, 9, "bold"), fill=THEME['text_muted'])
+            self.canvas.create_text(x, y, text=str(size - r), font=(FONT_NAME, 9, "bold"), fill=THEME['text_muted'])
 
         # Draw Cells
-        for r in range(9):
-            for c in range(9):
+        for r in range(size):
+            for c in range(size):
                 x0 = c * sq_size
                 y0 = r * sq_size
                 x1 = x0 + sq_size
@@ -277,8 +305,8 @@ class GameView(tk.Frame):
 
     def _draw_piece(self, x0: int, y0: int, x1: int, y1: int, piece: Piece):
         color = self.config.get('p1_color', '#2ECC71') if piece.owner == 0 else self.config.get('p2_color', '#E74C3C')
-
-        pad = 8
+        sq_size = x1 - x0
+        pad = max(4, int(sq_size * 0.11))
         # Subtle rim
         self.canvas.create_oval(x0 + pad + 1, y0 + pad + 2, x1 - pad + 1, y1 - pad + 2, fill='#151515', outline='')
         # Main piece circle
@@ -287,7 +315,8 @@ class GameView(tk.Frame):
         # Monogram letter ONLY (NO FULL WORDS)
         cx = (x0 + x1) // 2
         cy = (y0 + y1) // 2
-        self.canvas.create_text(cx, cy, text=piece.p_type, font=(FONT_NAME, 16, "bold"), fill='#FFFFFF')
+        font_sz = max(10, int(sq_size * 0.22))
+        self.canvas.create_text(cx, cy, text=piece.p_type, font=(FONT_NAME, font_sz, "bold"), fill='#FFFFFF')
 
     def _on_board_click(self, event):
         if not self.is_game_active or self.state.winner is not None:
@@ -301,7 +330,7 @@ class GameView(tk.Frame):
             if self.state.current_turn != my_role:
                 return
 
-        sq_size = 72
+        sq_size = self.current_sq_size
         c = event.x // sq_size
         r = event.y // sq_size
 

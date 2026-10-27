@@ -7,7 +7,7 @@ from ui_theme import (
     ThemedModal, draw_star
 )
 from game_logic import GameState, Piece
-from puzzle_logic import PuzzleScenario, PuzzleSession, PRECONFIGURED_PUZZLES, generate_procedural_puzzle
+from puzzle_logic import PuzzleScenario, PuzzleSession, PRECONFIGURED_PUZZLES, generate_winnable_puzzle
 from ai_engine import get_defender_move, DEFAULT_PROPOSAL_WEIGHTS
 import storage
 
@@ -15,7 +15,8 @@ import storage
 class PuzzleGameView(tk.Frame):
     """
     Puzzle Game Screen for the 'Optimal Defender' scenario.
-    Adheres strictly to the existing UI theme, color palette, and layout geometry.
+    Adheres strictly to Apple Design principles: resizable PanedWindow layout,
+    adaptive board scaling, restrained typography, and spoiler-free metrics toggling.
     """
     def __init__(self, parent, app, config: Dict[str, Any]):
         super().__init__(parent, bg=THEME['bg'])
@@ -23,17 +24,18 @@ class PuzzleGameView(tk.Frame):
         self.config = config
 
         # Initialize Scenario & Session
-        scenario_key = config.get('puzzle_scenario', 'p10_proposal')
-        board_size = config.get('board_size', 9)
+        scenario_key = config.get('puzzle_scenario', 'stage_6x6_01')
+        custom_obj = config.get('custom_scenario_obj')
 
-        if scenario_key == 'procedural':
-            self.scenario = generate_procedural_puzzle(target_steps=10, board_size=board_size)
+        if custom_obj:
+            self.scenario = custom_obj
         elif scenario_key in PRECONFIGURED_PUZZLES:
             self.scenario = PRECONFIGURED_PUZZLES[scenario_key]
         else:
-            self.scenario = PRECONFIGURED_PUZZLES['p10_proposal']
+            self.scenario = generate_winnable_puzzle(board_size=config.get('board_size', 6))
 
-        self.session = PuzzleSession(self.scenario)
+        self.show_metrics = config.get('show_metrics', False)
+        self.session = PuzzleSession(self.scenario, show_metrics=self.show_metrics)
         self.state = self.scenario.create_initial_state()
 
         self.selected_sq: Optional[Tuple[int, int]] = None
@@ -41,256 +43,169 @@ class PuzzleGameView(tk.Frame):
         self.last_move: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
         self.is_game_active = True
         self.ai_timer_id: Optional[str] = None
+        self.start_time = time.time()
+
+        # Canvas dynamic sizing
+        self.current_sq_size: int = 80
 
         self._build_ui()
         self._bind_hotkeys()
 
     def _build_ui(self):
-        # Top objective bar
-        top_bar = tk.Frame(
-            self,
-            bg=THEME['surface'],
-            height=36,
-            bd=1,
-            relief=tk.SOLID,
-            highlightbackground=THEME['border'],
-            highlightthickness=1
-        )
-        top_bar.pack(fill=tk.X, padx=16, pady=(10, 6))
+        # Top Bar
+        top_bar = tk.Frame(self, bg=THEME['surface'], height=42, bd=0, highlightbackground=THEME['border'], highlightthickness=1)
+        top_bar.pack(fill=tk.X, padx=0, pady=0)
 
-        goal_text = (
-            f"Puzzle Objective: Reach corner within S_max={self.session.s_max} moves "
-            f"(Optimal: S_optimal={self.session.s_optimal}). AI acts as Optimal Defender."
-        )
+        title_box = tk.Frame(top_bar, bg=THEME['surface'])
+        title_box.pack(side=tk.LEFT, padx=16, pady=8)
+
         tk.Label(
-            top_bar,
-            text=goal_text,
-            font=(FONT_NAME, 9, "bold"),
+            title_box,
+            text=self.scenario.title,
+            font=(FONT_NAME, 11, "bold"),
             bg=THEME['surface'],
             fg=THEME['text']
-        ).pack(side=tk.LEFT, padx=16, pady=6)
+        ).pack(side=tk.LEFT)
 
-        ButtonSecondary(top_bar, text="Puzzle Brief & Rules", command=self._show_rules_modal).pack(side=tk.RIGHT, padx=10, pady=4)
+        tk.Label(
+            title_box,
+            text=f"— S_optimal: {self.session.s_optimal} steps • Step Limit: {self.session.s_max} moves",
+            font=(FONT_NAME, 9),
+            bg=THEME['surface'],
+            fg=THEME['text_muted']
+        ).pack(side=tk.LEFT, padx=(8, 0))
 
-        # Main Layout
-        main_layout = tk.Frame(self, bg=THEME['bg'])
-        main_layout.pack(fill=tk.BOTH, expand=True, padx=16, pady=(6, 12))
+        ButtonSecondary(top_bar, text="Back to Stages", command=self._on_back_to_select).pack(side=tk.RIGHT, padx=12, pady=6)
+        ButtonSecondary(top_bar, text="Rules", command=self._show_rules_modal).pack(side=tk.RIGHT, padx=(0, 6), pady=6)
 
-        # Board Canvas (Left) - exactly 678x678
-        canvas_card = tk.Frame(
-            main_layout,
+        # Resizable PanedWindow: Board (Left) & Controls (Right)
+        self.paned = tk.PanedWindow(self, orient=tk.HORIZONTAL, bg=THEME['border'], sashrelief=tk.FLAT, sashwidth=4, bd=0)
+        self.paned.pack(fill=tk.BOTH, expand=True)
+
+        # Left Board Container (Adaptive & Resizable)
+        self.board_container = tk.Frame(self.paned, bg=THEME['bg'])
+        self.paned.add(self.board_container, minsize=420, stretch="always")
+        self.board_container.bind("<Configure>", self._on_board_container_resize)
+
+        self.canvas_card = tk.Frame(
+            self.board_container,
             bg=THEME['surface'],
             bd=1,
             relief=tk.SOLID,
             highlightbackground=THEME['border'],
             highlightthickness=1,
-            padx=8,
-            pady=8
+            padx=6,
+            pady=6
         )
-        canvas_card.pack(side=tk.LEFT, fill=tk.BOTH)
+        self.canvas_card.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
-        self.canvas = tk.Canvas(canvas_card, width=678, height=678, bg=THEME['bg'], highlightthickness=0)
+        self.canvas = tk.Canvas(self.canvas_card, width=540, height=540, bg=THEME['bg'], highlightthickness=0)
         self.canvas.pack()
         self.canvas.bind("<Button-1>", self._on_board_click)
 
-        # Controls Panel (Right)
-        right_panel = tk.Frame(
-            main_layout,
-            bg=THEME['surface'],
-            bd=1,
-            relief=tk.SOLID,
-            highlightbackground=THEME['border'],
-            highlightthickness=1,
-            padx=16,
-            pady=12
-        )
-        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(14, 0))
+        # Right Controls & Telemetry Sidebar (Resizable)
+        self.sidebar_pane = tk.Frame(self.paned, bg=THEME['surface'], bd=0, highlightbackground=THEME['border'], highlightthickness=1)
+        self.paned.add(self.sidebar_pane, minsize=300, stretch="never")
 
-        # Defender AI Card
-        agent_model_name = self.config.get('agent_model_name', 'Proposed: Optimized Agent (Alpha-Beta d=6)')
-        self.card_p2 = tk.Frame(right_panel, bg=THEME['surface_light'], padx=12, pady=6)
-        self.card_p2.pack(fill=tk.X, pady=(0, 4))
-        self.lbl_p2_name = tk.Label(
-            self.card_p2,
-            text=f"AI Defender: {agent_model_name}",
-            font=(FONT_NAME, 9, "bold"),
-            bg=THEME['surface_light'],
-            fg=self.config.get('p2_color', '#E74C3C')
-        )
-        self.lbl_p2_name.pack(side=tk.LEFT)
+        sidebar_scroll_canvas = tk.Canvas(self.sidebar_pane, bg=THEME['surface'], highlightthickness=0)
+        scroll_y = tk.Scrollbar(self.sidebar_pane, orient=tk.VERTICAL, command=sidebar_scroll_canvas.yview)
+        content = tk.Frame(sidebar_scroll_canvas, bg=THEME['surface'], padx=14, pady=12)
 
-        # Player Card
-        p1_title = self.config.get('p1_name', 'Player 1')
-        self.card_p1 = tk.Frame(right_panel, bg=THEME['surface_light'], padx=12, pady=6)
-        self.card_p1.pack(fill=tk.X, pady=(0, 8))
-        self.lbl_p1_name = tk.Label(
-            self.card_p1,
-            text=f"Player: {p1_title}",
-            font=(FONT_NAME, 9, "bold"),
-            bg=THEME['surface_light'],
-            fg=self.config.get('p1_color', '#2ECC71')
+        content.bind(
+            "<Configure>",
+            lambda e: sidebar_scroll_canvas.configure(scrollregion=sidebar_scroll_canvas.bbox("all"))
         )
-        self.lbl_p1_name.pack(side=tk.LEFT)
+        sidebar_scroll_canvas.create_window((0, 0), window=content, anchor="nw")
+        sidebar_scroll_canvas.configure(yscrollcommand=scroll_y.set)
 
-        # Strategic Performance Telemetry Panel (Table 1 & PEAS)
-        telemetry_frame = tk.Frame(
-            right_panel,
-            bg=THEME['surface_light'],
-            bd=1,
-            relief=tk.SOLID,
-            highlightbackground=THEME['border'],
-            highlightthickness=1,
-            padx=10,
-            pady=8
-        )
-        telemetry_frame.pack(fill=tk.X, pady=(0, 8))
+        sidebar_scroll_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
 
-        tk.Label(
-            telemetry_frame,
-            text="STRATEGIC PERFORMANCE TELEMETRY",
-            font=(FONT_NAME, 8, "bold"),
-            bg=THEME['surface_light'],
-            fg=THEME['text_muted']
-        ).pack(anchor="w", pady=(0, 4))
+        # Player & AI Info Card
+        players_card = tk.Frame(content, bg=THEME['surface_card'], padx=10, pady=8, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
+        players_card.pack(fill=tk.X, pady=(0, 8))
 
-        row1 = tk.Frame(telemetry_frame, bg=THEME['surface_light'])
-        row1.pack(fill=tk.X)
-        self.lbl_steps = tk.Label(
-            row1,
-            text=f"Steps: 0 / {self.session.s_optimal} (Max: {self.session.s_max})",
-            font=(FONT_NAME, 9, "bold"),
-            bg=THEME['surface_light'],
-            fg=THEME['text']
-        )
+        p_name = self.config.get('p1_name', 'Player 1')
+        ai_name = self.config.get('agent_model_name', 'Proposed: Optimized Agent (d=6)')
+
+        row_p = tk.Frame(players_card, bg=THEME['surface_card'])
+        row_p.pack(fill=tk.X)
+        tk.Label(row_p, text="Player:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=THEME['text_muted']).pack(side=tk.LEFT)
+        tk.Label(row_p, text=p_name, font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=self.config.get('p1_color', '#30D158')).pack(side=tk.RIGHT)
+
+        row_ai = tk.Frame(players_card, bg=THEME['surface_card'])
+        row_ai.pack(fill=tk.X, pady=(3, 0))
+        tk.Label(row_ai, text="Defender:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=THEME['text_muted']).pack(side=tk.LEFT)
+        tk.Label(row_ai, text=ai_name, font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=self.config.get('p2_color', '#FF453A')).pack(side=tk.RIGHT)
+
+        # Strategic Attempt Telemetry Box
+        strat_card = tk.Frame(content, bg=THEME['surface_light'], padx=10, pady=8, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
+        strat_card.pack(fill=tk.X, pady=(0, 8))
+
+        tk.Label(strat_card, text="ATTEMPT PROGRESS", font=(FONT_NAME, 8, "bold"), bg=THEME['surface_light'], fg=THEME['text_muted']).pack(anchor="w", pady=(0, 3))
+
+        s_row = tk.Frame(strat_card, bg=THEME['surface_light'])
+        s_row.pack(fill=tk.X)
+        self.lbl_steps = tk.Label(s_row, text=f"Steps: 0 / {self.session.s_optimal}", font=(FONT_NAME, 10, "bold"), bg=THEME['surface_light'], fg=THEME['text'])
         self.lbl_steps.pack(side=tk.LEFT)
 
-        self.lbl_delay = tk.Label(
-            row1,
-            text="Delay: ΔS = 0",
-            font=(FONT_NAME, 9, "bold"),
-            bg=THEME['surface_light'],
-            fg='#2ECC71'
-        )
+        self.lbl_delay = tk.Label(s_row, text="Delay: ΔS = 0", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_light'], fg=THEME['success'])
         self.lbl_delay.pack(side=tk.RIGHT)
 
-        row2 = tk.Frame(telemetry_frame, bg=THEME['surface_light'])
-        row2.pack(fill=tk.X, pady=(3, 0))
-        self.lbl_resets = tk.Label(
-            row2,
-            text="Resets: 0 | Cum. Steps: 0 | Undos: 0",
-            font=(FONT_NAME, 8),
-            bg=THEME['surface_light'],
-            fg=THEME['text_muted']
-        )
-        self.lbl_resets.pack(side=tk.LEFT)
+        st_row = tk.Frame(strat_card, bg=THEME['surface_light'])
+        st_row.pack(fill=tk.X, pady=(3, 0))
+        self.lbl_sub_stats = tk.Label(st_row, text="Resets: 0 • Undos: 0", font=(FONT_NAME, 8), bg=THEME['surface_light'], fg=THEME['text_muted'])
+        self.lbl_sub_stats.pack(side=tk.LEFT)
 
-        self.lbl_status = tk.Label(
-            row2,
-            text="Status: ON TRACK",
-            font=(FONT_NAME, 8, "bold"),
-            bg=THEME['surface_light'],
-            fg=THEME['accent']
-        )
+        self.lbl_status = tk.Label(st_row, text="ON TRACK", font=(FONT_NAME, 8, "bold"), bg=THEME['surface_light'], fg=THEME['accent'])
         self.lbl_status.pack(side=tk.RIGHT)
 
-        # AI Search Efficiency Telemetry Panel (Table 1, 2.1.3 & 2.2.2)
-        ai_telemetry_frame = tk.Frame(
-            right_panel,
-            bg=THEME['surface_light'],
-            bd=1,
-            relief=tk.SOLID,
-            highlightbackground=THEME['border'],
-            highlightthickness=1,
-            padx=10,
-            pady=8
-        )
-        ai_telemetry_frame.pack(fill=tk.X, pady=(0, 8))
+        # AI Search Metrics Box (Only shown if show_metrics is enabled)
+        if self.show_metrics:
+            self.ai_metrics_card = tk.Frame(content, bg=THEME['surface_card'], padx=10, pady=8, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
+            self.ai_metrics_card.pack(fill=tk.X, pady=(0, 8))
 
-        tk.Label(
-            ai_telemetry_frame,
-            text="AI PER-TURN SEARCH METRICS",
-            font=(FONT_NAME, 8, "bold"),
-            bg=THEME['surface_light'],
-            fg=THEME['text_muted']
-        ).pack(anchor="w", pady=(0, 4))
+            tk.Label(self.ai_metrics_card, text="AI SEARCH TELEMETRY", font=(FONT_NAME, 8, "bold"), bg=THEME['surface_card'], fg=THEME['text_muted']).pack(anchor="w", pady=(0, 3))
 
-        self.lbl_ai_action = tk.Label(
-            ai_telemetry_frame,
-            text="Last Action A = None | Eval: 0.00",
-            font=("Consolas", 8),
-            bg=THEME['surface_light'],
-            fg=THEME['text']
-        )
-        self.lbl_ai_action.pack(anchor="w")
+            self.lbl_ai_action = tk.Label(self.ai_metrics_card, text="Last Action A = None", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text'])
+            self.lbl_ai_action.pack(anchor="w")
 
-        self.lbl_ai_metrics = tk.Label(
-            ai_telemetry_frame,
-            text="Turn Latency: -- | Nodes: 0/0 | Prune: 0.0%",
-            font=("Consolas", 8),
-            bg=THEME['surface_light'],
-            fg=THEME['text_muted']
-        )
-        self.lbl_ai_metrics.pack(anchor="w", pady=(2, 0))
+            self.lbl_ai_metrics = tk.Label(self.ai_metrics_card, text="Latency: -- • Prune: 0.0%", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'])
+            self.lbl_ai_metrics.pack(anchor="w", pady=(2, 0))
+        else:
+            self.ai_metrics_card = None
 
-        # Move History (Fixed Height)
-        tk.Label(
-            right_panel,
-            text="Move History:",
-            font=(FONT_NAME, 9, "bold"),
-            bg=THEME['surface'],
-            fg=THEME['text_muted']
-        ).pack(anchor="w")
+        # Move History
+        tk.Label(content, text="Move History:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text_muted']).pack(anchor="w")
+        notation_box = tk.Frame(content, bg=THEME['surface_light'], height=130)
+        notation_box.pack(fill=tk.X, pady=(3, 8))
+        notation_box.pack_propagate(False)
 
-        notation_container = tk.Frame(right_panel, bg=THEME['surface_light'], height=130)
-        notation_container.pack(fill=tk.X, pady=(3, 8))
-        notation_container.pack_propagate(False)
-
-        scroll = tk.Scrollbar(notation_container)
-        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        hist_scroll = tk.Scrollbar(notation_box)
+        hist_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.list_notation = tk.Listbox(
-            notation_container,
-            bg='#1D1E26',
+            notation_box,
+            bg=THEME['surface_card'],
             fg=THEME['text'],
-            font=("Consolas", 9),
+            font=(FONT_NAME, 8),
             bd=0,
-            yscrollcommand=scroll.set,
+            yscrollcommand=hist_scroll.set,
             selectbackground=THEME['accent']
         )
         self.list_notation.pack(fill=tk.BOTH, expand=True)
-        scroll.config(command=self.list_notation.yview)
+        hist_scroll.config(command=self.list_notation.yview)
 
-        # Action Buttons Grid
-        btn_frame = tk.Frame(right_panel, bg=THEME['surface'])
+        # Action Buttons
+        btn_frame = tk.Frame(content, bg=THEME['surface'])
         btn_frame.pack(fill=tk.X, pady=(2, 0))
 
-        self.btn_undo = ButtonSecondary(
-            btn_frame,
-            text=f"Undo ({HOTKEYS['undo']['key_str']})",
-            command=self._on_undo
-        )
+        self.btn_undo = ButtonSecondary(btn_frame, text=f"Undo ({HOTKEYS['undo']['key_str']})", command=self._on_undo)
         self.btn_undo.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
 
-        btn_restart = ButtonSecondary(
-            btn_frame,
-            text=f"Reset Attempt ({HOTKEYS['restart']['key_str']})",
-            command=self._on_reset_attempt
-        )
-        btn_restart.grid(row=0, column=1, sticky="ew", padx=2, pady=2)
-
-        btn_surrender = ButtonDanger(
-            btn_frame,
-            text="Concede Puzzle",
-            command=self._on_concede
-        )
-        btn_surrender.grid(row=1, column=0, sticky="ew", padx=2, pady=2)
-
-        btn_hub = ButtonSecondary(
-            btn_frame,
-            text="Back to Main Menu",
-            command=self._on_back_to_hub
-        )
-        btn_hub.grid(row=1, column=1, sticky="ew", padx=2, pady=2)
+        ButtonSecondary(btn_frame, text=f"Reset ({HOTKEYS['restart']['key_str']})", command=self._on_reset_attempt).grid(row=0, column=1, sticky="ew", padx=2, pady=2)
+        ButtonDanger(btn_frame, text="Concede", command=self._on_concede).grid(row=1, column=0, sticky="ew", padx=2, pady=2)
+        ButtonSecondary(btn_frame, text="Stages List", command=self._on_back_to_select).grid(row=1, column=1, sticky="ew", padx=2, pady=2)
 
         btn_frame.columnconfigure(0, weight=1)
         btn_frame.columnconfigure(1, weight=1)
@@ -306,26 +221,39 @@ class PuzzleGameView(tk.Frame):
         for h in [HOTKEYS['undo'], HOTKEYS['restart']]:
             self.app.unbind(h['seq'])
 
+    def _on_board_container_resize(self, event):
+        """Dynamically adjusts square size and canvas dimensions to fit the container."""
+        avail_w = event.width - 24
+        avail_h = event.height - 24
+        dim = max(300, min(avail_w, avail_h, 700))
+        size = self.state.board_size
+        new_sq_size = dim // size
+        total_canvas_dim = new_sq_size * size + 30
+
+        if new_sq_size != self.current_sq_size or self.canvas.winfo_width() != total_canvas_dim:
+            self.current_sq_size = new_sq_size
+            self.canvas.config(width=total_canvas_dim, height=total_canvas_dim)
+            self._draw_board()
+
     def _draw_board(self):
         self.canvas.delete("all")
         size = self.state.board_size
-        sq_size = 648 // size
+        sq_size = self.current_sq_size
         board_dim = size * sq_size
+        total_dim = board_dim + 30
 
-        self.canvas.create_rectangle(0, 0, 678, 678, fill=THEME['surface'], outline='')
+        self.canvas.create_rectangle(0, 0, total_dim, total_dim, fill=THEME['surface'], outline='')
 
-        # Coordinates ONLY on BOTTOM (Letters) and RIGHT (Numbers)
+        # Coordinates on bottom and right
         for c in range(size):
             x = c * sq_size + sq_size // 2
             y = board_dim + 15
-            letter = chr(65 + c)
-            self.canvas.create_text(x, y, text=letter, font=(FONT_NAME, 9, "bold"), fill=THEME['text_muted'])
+            self.canvas.create_text(x, y, text=chr(65 + c), font=(FONT_NAME, 8, "bold"), fill=THEME['text_muted'])
 
         for r in range(size):
             x = board_dim + 15
             y = r * sq_size + sq_size // 2
-            num_str = str(size - r)
-            self.canvas.create_text(x, y, text=num_str, font=(FONT_NAME, 9, "bold"), fill=THEME['text_muted'])
+            self.canvas.create_text(x, y, text=str(size - r), font=(FONT_NAME, 8, "bold"), fill=THEME['text_muted'])
 
         # Draw Cells
         for r in range(size):
@@ -336,9 +264,7 @@ class PuzzleGameView(tk.Frame):
                 y1 = y0 + sq_size
 
                 base_color = THEME['board_light'] if (r + c) % 2 == 0 else THEME['board_dark']
-
                 is_p1_target = ((r, c) == self.state.target_corners[0])
-                is_p2_target = ((r, c) == self.state.target_corners[1])
 
                 cell_fill = base_color
                 outline_color = THEME['board_grid']
@@ -348,10 +274,6 @@ class PuzzleGameView(tk.Frame):
                     cell_fill = THEME['corner_p1']
                     outline_color = '#F57F17'
                     outline_width = 2
-                elif is_p2_target:
-                    cell_fill = THEME['corner_p2']
-                    outline_color = '#C62828'
-                    outline_width = 2
 
                 if self.last_move and ((r, c) == self.last_move[0] or (r, c) == self.last_move[1]):
                     cell_fill = THEME['last_move']
@@ -359,7 +281,6 @@ class PuzzleGameView(tk.Frame):
                 if self.selected_sq == (r, c):
                     cell_fill = THEME['select_square']
 
-                # CAPTURE MOVE: SQUARE HIGHLIGHT RED
                 if (r, c) in self.valid_targets:
                     dest_piece = self.state.board[r][c]
                     if dest_piece is not None:
@@ -368,43 +289,34 @@ class PuzzleGameView(tk.Frame):
 
                 self.canvas.create_rectangle(x0, y0, x1, y1, fill=cell_fill, outline=outline_color, width=outline_width)
 
-                # CORNER OBJECTIVES: CLEAN VECTOR STAR
                 if is_p1_target and self.state.board[r][c] is None:
-                    draw_star(self.canvas, (x0 + x1) / 2, (y0 + y1) / 2, 14, fill='#F57F17', outline='#E65100')
-                elif is_p2_target and self.state.board[r][c] is None:
-                    draw_star(self.canvas, (x0 + x1) / 2, (y0 + y1) / 2, 14, fill='#C62828', outline='#8E0000')
+                    draw_star(self.canvas, (x0 + x1) / 2, (y0 + y1) / 2, max(6, sq_size * 0.28), fill='#F57F17', outline='')
 
-                # EMPTY VALID MOVE: BLACK DOT
                 if (r, c) in self.valid_targets and self.state.board[r][c] is None:
                     cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
-                    self.canvas.create_oval(cx - 7, cy - 7, cx + 7, cy + 7, fill=THEME['move_dot'], outline='')
+                    rad = max(4, sq_size // 10)
+                    self.canvas.create_oval(cx - rad, cy - rad, cx + rad, cy + rad, fill=THEME['move_dot'], outline='')
 
-                # DRAW PIECE
                 piece = self.state.board[r][c]
                 if piece:
                     self._draw_piece(x0, y0, x1, y1, piece, sq_size)
 
     def _draw_piece(self, x0: int, y0: int, x1: int, y1: int, piece: Piece, sq_size: int):
-        color = self.config.get('p1_color', '#2ECC71') if piece.owner == 0 else self.config.get('p2_color', '#E74C3C')
-        pad = max(6, sq_size // 9)
+        color = self.config.get('p1_color', '#30D158') if piece.owner == 0 else self.config.get('p2_color', '#FF453A')
+        pad = max(4, sq_size // 8)
 
-        # Subtle rim
-        self.canvas.create_oval(x0 + pad + 1, y0 + pad + 2, x1 - pad + 1, y1 - pad + 2, fill='#151515', outline='')
-        # Main piece circle
         self.canvas.create_oval(x0 + pad, y0 + pad, x1 - pad, y1 - pad, fill=color, outline='#FFFFFF', width=2)
-
-        # Monogram letter ONLY
         cx = (x0 + x1) // 2
         cy = (y0 + y1) // 2
-        font_size = 18 if sq_size > 90 else 14
-        self.canvas.create_text(cx, cy, text=piece.p_type, font=(FONT_NAME, font_size, "bold"), fill='#FFFFFF')
+        font_sz = max(8, sq_size // 4)
+        self.canvas.create_text(cx, cy, text=piece.p_type, font=(FONT_NAME, font_sz, "bold"), fill='#FFFFFF')
 
     def _on_board_click(self, event):
         if not self.is_game_active or self.state.winner is not None or self.state.current_turn != 0:
             return
 
         size = self.state.board_size
-        sq_size = 648 // size
+        sq_size = self.current_sq_size
         c = event.x // sq_size
         r = event.y // sq_size
 
@@ -413,9 +325,7 @@ class PuzzleGameView(tk.Frame):
 
         if self.selected_sq:
             if (r, c) in self.valid_targets:
-                start = self.selected_sq
-                end = (r, c)
-                self._execute_player_move(start, end)
+                self._execute_player_move(self.selected_sq, (r, c))
             else:
                 target_p = self.state.board[r][c]
                 if target_p and target_p.owner == self.state.current_turn:
@@ -452,7 +362,6 @@ class PuzzleGameView(tk.Frame):
             self._handle_puzzle_finish(solved=False, reason=self.session.neutralization_reason)
             return
 
-        # AI Defender responds
         if self.state.current_turn == 1 and self.is_game_active:
             self._trigger_ai_move()
 
@@ -461,7 +370,6 @@ class PuzzleGameView(tk.Frame):
         depth = self.config.get('search_depth', 6)
         weights = self.config.get('weights', DEFAULT_PROPOSAL_WEIGHTS)
 
-        # AI move computation
         best_move, eval_score, telemetry = get_defender_move(
             state=self.state,
             agent_model=agent_model,
@@ -484,7 +392,6 @@ class PuzzleGameView(tk.Frame):
             prune_efficiency=telemetry.pruning_efficiency
         )
 
-        # Slight UI response delay (0.35s) so the human sees their move before AI strikes
         def do_move():
             if not self.is_game_active:
                 return
@@ -498,12 +405,11 @@ class PuzzleGameView(tk.Frame):
             elif status == 'NEUTRALIZED':
                 self._handle_puzzle_finish(solved=False, reason=self.session.neutralization_reason)
 
-        self.ai_timer_id = self.after(350, do_move)
+        self.ai_timer_id = self.after(300, do_move)
 
     def _update_ui_state(self):
         self._draw_board()
 
-        # Update telemetry labels
         cur = self.session.current_attempt_steps
         s_opt = self.session.s_optimal
         s_max = self.session.s_max
@@ -511,39 +417,36 @@ class PuzzleGameView(tk.Frame):
 
         delta = self.session.delay_margin
         if delta == 0:
-            self.lbl_delay.config(text="Delay: ΔS = 0 (Optimal)", fg='#2ECC71')
+            self.lbl_delay.config(text="Delay: ΔS = 0 (Optimal)", fg=THEME['success'])
         else:
-            self.lbl_delay.config(text=f"Delay: ΔS = +{delta}", fg='#FFB300')
+            self.lbl_delay.config(text=f"Delay: ΔS = +{delta}", fg=THEME['warning'])
 
-        self.lbl_resets.config(
-            text=f"Resets: {self.session.resets_count} | Cum. Steps: {self.session.cumulative_steps} | Undos: {self.session.undo_count}"
+        self.lbl_sub_stats.config(
+            text=f"Resets: {self.session.resets_count} • Undos: {self.session.undo_count}"
         )
 
         status = self.session.evaluate_status(self.state)
         if status == 'SOLVED':
-            self.lbl_status.config(text="Status: SOLVED", fg='#2ECC71')
+            self.lbl_status.config(text="SOLVED", fg=THEME['success'])
         elif status == 'NEUTRALIZED':
-            self.lbl_status.config(text="Status: NEUTRALIZED", fg='#E53935')
+            self.lbl_status.config(text="NEUTRALIZED", fg=THEME['danger'])
         elif status == 'DELAYED':
-            self.lbl_status.config(text=f"Status: DELAYED (+{delta})", fg='#FFB300')
+            self.lbl_status.config(text=f"DELAYED (+{delta})", fg=THEME['warning'])
         else:
-            self.lbl_status.config(text="Status: ON TRACK", fg=THEME['accent'])
+            self.lbl_status.config(text="ON TRACK", fg=THEME['accent'])
 
-        # AI Telemetry
-        if self.session.ai_telemetry_history:
+        if self.show_metrics and self.ai_metrics_card and self.session.ai_telemetry_history:
             last = self.session.ai_telemetry_history[-1]
             act = last['action']
             score = last['eval_score']
             size = self.state.board_size
             act_str = f"{chr(65 + act[0][1])}{size - act[0][0]} -> {chr(65 + act[1][1])}{size - act[1][0]}"
-            self.lbl_ai_action.config(text=f"Last Action A: {act_str} | EvalScore: {score:.2f}")
+            self.lbl_ai_action.config(text=f"Action A: {act_str} • Score: {score:.1f}")
 
             t = last['t_turn']
             prune = last['prune_efficiency']
-            ngen = last['nodes_gen']
-            neval = last['nodes_eval']
             self.lbl_ai_metrics.config(
-                text=f"Latency Tturn: {t:.3f}s (≤2.0s) | Nodes: {neval}/{ngen} | Prune: {prune:.1f}%"
+                text=f"Latency: {t:.3f}s (≤2.0s) • Prune: {prune:.1f}%"
             )
 
         # Move History
@@ -562,7 +465,6 @@ class PuzzleGameView(tk.Frame):
         if not self.config.get('undo_enabled', True) or not self.is_game_active:
             return
 
-        # Undo both AI move and Player move
         if self.state.undo(player_idx=0):
             self.session.record_undo()
             self.state.undo(player_idx=0)
@@ -578,6 +480,7 @@ class PuzzleGameView(tk.Frame):
         self.valid_targets = []
         self.last_move = None
         self.is_game_active = True
+        self.start_time = time.time()
         self._update_ui_state()
 
     def _on_concede(self):
@@ -587,30 +490,45 @@ class PuzzleGameView(tk.Frame):
 
     def _handle_puzzle_finish(self, solved: bool, reason: str = ""):
         self.is_game_active = False
+        time_spent = int(time.time() - self.start_time)
 
-        modal = ThemedModal(self, "Puzzle Result", min_width=440)
+        # Record Score in Stage-Specific Leaderboard (Requirement)
+        if solved:
+            p_name = self.config.get('p1_name', 'Player 1')
+            is_guest = self.config.get('is_guest_1', False)
+            storage.save_stage_score(
+                stage_id=self.scenario.id,
+                username=p_name,
+                steps=self.session.current_attempt_steps,
+                time_spent=time_spent,
+                undos=self.session.undo_count,
+                delay_margin=self.session.delay_margin,
+                is_guest=is_guest
+            )
+
+        modal = ThemedModal(self, "Stage Outcome", min_width=440)
 
         if solved:
             tk.Label(
                 modal.body,
-                text="Puzzle Successfully Solved!",
-                font=(FONT_NAME, 16, "bold"),
+                text="Puzzle Solved!",
+                font=(FONT_NAME, 14, "bold"),
                 bg=THEME['surface'],
-                fg='#2ECC71'
+                fg=THEME['success']
             ).pack(pady=(6, 2))
 
             summary = (
-                f"You reached the target corner in {self.session.current_attempt_steps} steps "
+                f"You reached the corner in {self.session.current_attempt_steps} steps "
                 f"(Optimal: {self.session.s_optimal}).\n"
-                f"Forced Delay Margin ΔS: {self.session.delay_margin} moves."
+                f"Forced Delay Margin ΔS: +{self.session.delay_margin} moves • Time: {time_spent}s."
             )
         else:
             tk.Label(
                 modal.body,
-                text="Puzzle Neutralized (AI Defender Wins)",
-                font=(FONT_NAME, 16, "bold"),
+                text="Puzzle Neutralized (Defender Wins)",
+                font=(FONT_NAME, 14, "bold"),
                 bg=THEME['surface'],
-                fg='#E53935'
+                fg=THEME['danger']
             ).pack(pady=(6, 2))
 
             cause = reason or "Target rendered unreachable"
@@ -628,7 +546,6 @@ class PuzzleGameView(tk.Frame):
             justify="center"
         ).pack(pady=(0, 10))
 
-        # Metrics Breakdown
         box = tk.Frame(modal.body, bg=THEME['surface_light'], padx=12, pady=8)
         box.pack(fill=tk.X, pady=4)
 
@@ -643,66 +560,45 @@ class PuzzleGameView(tk.Frame):
         tk.Label(
             box,
             text=f"Cumulative Steps Across Resets: {self.session.cumulative_steps + self.session.current_attempt_steps}",
-            font=(FONT_NAME, 9),
+            font=(FONT_NAME, 8),
             bg=THEME['surface_light'],
             fg=THEME['text_muted']
         ).pack(anchor="w")
 
         tk.Label(
             box,
-            text=f"Total Resets: {self.session.resets_count} | Undos Used: {self.session.undo_count}",
-            font=(FONT_NAME, 9),
+            text=f"Resets: {self.session.resets_count} • Undos Used: {self.session.undo_count}",
+            font=(FONT_NAME, 8),
             bg=THEME['surface_light'],
             fg=THEME['text_muted']
         ).pack(anchor="w")
-
-        if self.session.ai_telemetry_history:
-            avg_prune = sum(x['prune_efficiency'] for x in self.session.ai_telemetry_history) / len(self.session.ai_telemetry_history)
-            avg_lat = sum(x['t_turn'] for x in self.session.ai_telemetry_history) / len(self.session.ai_telemetry_history)
-            tk.Label(
-                box,
-                text=f"AI Search Metrics: Avg Latency: {avg_lat:.3f}s | Avg Pruning Efficiency: {avg_prune:.1f}%",
-                font=(FONT_NAME, 8, "italic"),
-                bg=THEME['surface_light'],
-                fg=THEME['accent']
-            ).pack(anchor="w", pady=(4, 0))
 
         def retry():
             modal.dismiss()
             self._on_reset_attempt()
 
-        def to_hub():
+        def to_select():
             modal.dismiss()
             self._cleanup()
-            self.app.show_view('menu')
+            self.app.show_view('puzzle_select')
 
-        def to_config():
-            modal.dismiss()
-            self._cleanup()
-            self.app.open_config('Puzzle')
-
-        ButtonPrimary(modal.footer, text="Retry Puzzle", command=retry).pack(side=tk.LEFT, padx=3)
-        ButtonSecondary(modal.footer, text="Select Puzzle", command=to_config).pack(side=tk.LEFT, padx=3)
-        ButtonSecondary(modal.footer, text="Main Menu", command=to_hub).pack(side=tk.RIGHT, padx=3)
+        ButtonPrimary(modal.footer, text="Retry Stage", command=retry).pack(side=tk.LEFT, padx=3)
+        ButtonSecondary(modal.footer, text="Stages Catalog", command=to_select).pack(side=tk.RIGHT, padx=3)
 
     def _show_rules_modal(self):
-        modal = ThemedModal(self, "Puzzle Objectives & Non-Transitive Mechanics", min_width=500)
+        modal = ThemedModal(self, "Rules and Movement", min_width=480)
         content = (
-            "1. Puzzle Objective:\n"
+            "1. Objective:\n"
             f"   Navigate your piece to the opponent's star corner within S_max={self.session.s_max} moves.\n"
             f"   The optimal path takes exactly S_optimal={self.session.s_optimal} steps.\n\n"
-            "2. AI Defender Role:\n"
-            "   The AI agent acts as an optimal defender. If you play optimally, it aims to delay\n"
-            "   you as long as possible (maximizing delay margin ΔS). If you play sub-optimally,\n"
-            "   it exploits the mistake to neutralize your advance and make the goal unreachable.\n\n"
-            "3. Non-Transitive Combat Hierarchy:\n"
-            "   - Elephant (E) defeats Human (H)\n"
-            "   - Human (H) defeats Ant (A)\n"
-            "   - Ant (A) defeats Elephant (E)\n"
-            "   Pieces of the same type cannot capture each other.\n\n"
-            "4. Search Optimizations:\n"
-            "   The agent utilizes Minimax with Alpha-Beta Pruning, suit-adapted MVV-LVA move ordering,\n"
-            "   and dynamic non-transitive heuristic scoring E(s) evaluated under 2.0s per turn."
+            "2. Combat Hierarchy:\n"
+            "   Elephant (E) defeats Human (H)\n"
+            "   Human (H) defeats Ant (A)\n"
+            "   Ant (A) defeats Elephant (E)\n"
+            "   Matching pieces cannot capture each other.\n\n"
+            "3. Movement:\n"
+            "   Each piece moves 1 square in any of the 8 directions.\n"
+            "   Squares highlighted red represent valid captures."
         )
         tk.Label(
             modal.body,
@@ -713,11 +609,11 @@ class PuzzleGameView(tk.Frame):
             justify="left"
         ).pack(anchor="w", pady=4)
 
-        ButtonPrimary(modal.footer, text="Understood", command=modal.dismiss).pack(side=tk.RIGHT)
+        ButtonPrimary(modal.footer, text="Close", command=modal.dismiss).pack(side=tk.RIGHT)
 
-    def _on_back_to_hub(self):
+    def _on_back_to_select(self):
         self._cleanup()
-        self.app.show_view('menu')
+        self.app.show_view('puzzle_select')
 
     def _cleanup(self):
         self._unbind_hotkeys()
