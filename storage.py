@@ -1,7 +1,6 @@
 import json
 import os
 import uuid
-import random
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
@@ -53,20 +52,15 @@ def get_recent_profiles() -> List[str]:
     return profiles if profiles else ["Player 1"]
 
 
-def generate_guest_name() -> str:
-    return f"Guest_{random.randint(1000, 9999)}"
-
-
 # Multi-Category Leaderboard Management
 
-def save_pve_score(username: str, turns: int, time_left: int, undos: int, difficulty: str = "normal", is_guest: bool = False) -> str:
+def save_pve_score(username: str, turns: int, time_left: int, undos: int, difficulty: str = "normal") -> str:
     db = _load_json(DB_FILE, {"pve": [], "pvp": {}, "stages": {}})
     record_id = str(uuid.uuid4())[:8]
-    clean_name = username.strip() or ("Guest" if is_guest else "Player")
+    clean_name = username.strip() or "Player"
     record = {
         "id": record_id,
         "username": clean_name,
-        "is_guest": is_guest or clean_name.lower().startswith("guest"),
         "turns": turns,
         "time_left": time_left,
         "undos": undos,
@@ -76,8 +70,7 @@ def save_pve_score(username: str, turns: int, time_left: int, undos: int, diffic
     db.setdefault("pve", []).append(record)
     _save_json(DB_FILE, db)
 
-    if not is_guest and clean_name:
-        save_last_username(clean_name)
+    save_last_username(clean_name)
 
     return record_id
 
@@ -122,18 +115,17 @@ def clear_pve_leaderboard(difficulty: str = "all") -> None:
 
 # Per-Stage Puzzle Leaderboards
 
-def save_stage_score(stage_id: str, username: str, steps: int, time_spent: int, undos: int, delay_margin: int, is_guest: bool = False) -> str:
+def save_stage_score(stage_id: str, username: str, steps: int, time_spent: int, undos: int, delay_margin: int) -> str:
     db = _load_json(DB_FILE, {"pve": [], "pvp": {}, "stages": {}})
     if "stages" not in db:
         db["stages"] = {}
 
     stage_records = db["stages"].setdefault(stage_id, [])
     record_id = str(uuid.uuid4())[:8]
-    clean_name = username.strip() or ("Guest" if is_guest else "Player")
+    clean_name = username.strip() or "Player"
     record = {
         "id": record_id,
         "username": clean_name,
-        "is_guest": is_guest or clean_name.lower().startswith("guest"),
         "steps": steps,
         "time_spent": time_spent,
         "undos": undos,
@@ -143,8 +135,7 @@ def save_stage_score(stage_id: str, username: str, steps: int, time_spent: int, 
     stage_records.append(record)
     _save_json(DB_FILE, db)
 
-    if not is_guest and clean_name:
-        save_last_username(clean_name)
+    save_last_username(clean_name)
 
     return record_id
 

@@ -135,6 +135,20 @@ class TestPuzzleSelect(unittest.TestCase):
         self.mocks['threading.Thread'].assert_not_called()
         view.after.assert_not_called()
 
+    @patch('views.puzzle_select_view.storage.save_last_username')
+    def test_starting_puzzle_remembers_any_player_name(self, save_name):
+        self.app.random_challenges = self.puzzles
+        view = self.make_view()
+        view._set_category('random')
+        view.var_player_name = Mock(get=Mock(return_value='Guest_1234'))
+        view.var_ai_model = Mock(get=Mock(return_value='Proposed: Optimized (Alpha-Beta d=6)'))
+        view.var_show_metrics = Mock(get=Mock(return_value=False))
+        view._start_selected_stage()
+        save_name.assert_called_once_with('Guest_1234')
+        config = self.app.start_puzzle.call_args.args[0]
+        self.assertEqual(config['p1_name'], 'Guest_1234')
+        self.assertNotIn('is_guest_1', config)
+
     def test_generation_failure_is_visible_and_allows_retry(self):
         view = self.make_view()
         view._set_category('random')

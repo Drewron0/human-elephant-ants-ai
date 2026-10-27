@@ -527,15 +527,13 @@ class PuzzleGameView(tk.Frame):
         # Record Score in Stage-Specific Leaderboard (Requirement)
         if solved:
             p_name = self.config.get('p1_name', 'Player 1')
-            is_guest = self.config.get('is_guest_1', False)
             storage.save_stage_score(
                 stage_id=self.scenario.id,
                 username=p_name,
                 steps=self.session.current_attempt_steps,
                 time_spent=time_spent,
                 undos=self.session.undo_count,
-                delay_margin=self.session.delay_margin,
-                is_guest=is_guest
+                delay_margin=self.session.delay_margin
             )
 
         modal = ThemedModal(self, "Stage Outcome", min_width=440)

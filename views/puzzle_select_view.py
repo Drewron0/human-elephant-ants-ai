@@ -158,20 +158,6 @@ class PuzzleSelectView(tk.Frame):
         cb_player = ttk.Combobox(content, textvariable=self.var_player_name, values=storage.get_recent_profiles(), width=24, font=(FONT_NAME, 9))
         cb_player.pack(fill=tk.X, pady=(0, 4))
 
-        self.var_guest = tk.BooleanVar(value=False)
-        tk.Checkbutton(
-            content,
-            text="Play as Guest",
-            variable=self.var_guest,
-            font=(FONT_NAME, 8),
-            bg=THEME['surface'],
-            fg=THEME['text_muted'],
-            selectcolor=THEME['surface_light'],
-            activebackground=THEME['surface'],
-            activeforeground=THEME['text'],
-            command=self._on_guest_toggle
-        ).pack(anchor="w", pady=(0, 8))
-
         # AI Model Selector
         tk.Label(content, text="AI Defender Model:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(4, 2))
         self.var_ai_model = tk.StringVar(value="Proposed: Optimized (Alpha-Beta d=6)")
@@ -234,12 +220,6 @@ class PuzzleSelectView(tk.Frame):
 
     def _on_canvas_configure(self, event):
         self.grid_canvas.itemconfig(self.canvas_window, width=event.width)
-
-    def _on_guest_toggle(self):
-        if self.var_guest.get():
-            self.var_player_name.set(storage.generate_guest_name())
-        else:
-            self.var_player_name.set(storage.get_last_username() or "Player 1")
 
     def _set_category(self, cat: str):
         self.active_category = cat
@@ -498,8 +478,7 @@ class PuzzleSelectView(tk.Frame):
             puzzle = all_p.get(self.selected_puzzle_id) or list(PRECONFIGURED_STAGES_6X6.values())[0]
 
         p_name = self.var_player_name.get().strip() or "Player 1"
-        if not self.var_guest.get() and not p_name.lower().startswith("guest"):
-            storage.save_last_username(p_name)
+        storage.save_last_username(p_name)
 
         model_val = self.var_ai_model.get()
         if "Alpha-Beta d=6" in model_val:
@@ -518,7 +497,6 @@ class PuzzleSelectView(tk.Frame):
         config = {
             'mode': 'Puzzle',
             'p1_name': p_name,
-            'is_guest_1': self.var_guest.get(),
             'puzzle_scenario': puzzle.id,
             'custom_scenario_obj': puzzle,
             'agent_model': agent_model,

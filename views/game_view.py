@@ -87,8 +87,6 @@ class GameView(tk.Frame):
         p2_title = self.config.get('p2_name', 'Player 2')
         if self.config.get('mode') == 'PvE':
             p2_title += f" ({self.config.get('difficulty', 'Normal').capitalize()})"
-        elif self.config.get('is_guest_2'):
-            p2_title += " [Guest]"
 
         self.card_p2 = tk.Frame(right_panel, bg=THEME['surface_light'], padx=12, pady=8)
         self.card_p2.pack(fill=tk.X, pady=(0, 6))
@@ -101,8 +99,6 @@ class GameView(tk.Frame):
 
         # Player 1 Card
         p1_title = self.config.get('p1_name', 'Player 1')
-        if self.config.get('is_guest_1'):
-            p1_title += " [Guest]"
 
         self.card_p1 = tk.Frame(right_panel, bg=THEME['surface_light'], padx=12, pady=8)
         self.card_p1.pack(fill=tk.X, pady=(0, 10))
@@ -488,8 +484,7 @@ class GameView(tk.Frame):
                     turns=self.state.total_turns,
                     time_left=max(0, self.time_p1),
                     undos=self.state.undos_p1,
-                    difficulty=self.config.get('difficulty', 'normal'),
-                    is_guest=self.config.get('is_guest_1', False)
+                    difficulty=self.config.get('difficulty', 'normal')
                 )
         else:
             storage.update_pvp_stats(self.config.get('p1_name'), won=(winner == 0), undos=self.state.undos_p1)

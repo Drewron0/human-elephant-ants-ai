@@ -57,21 +57,6 @@ class ConfigView(tk.Frame):
         self.cb_p1_name = ttk.Combobox(p1_box, textvariable=self.var_p1_name, values=profiles, width=16, font=entry_font)
         self.cb_p1_name.pack(side=tk.LEFT)
 
-        self.var_p1_guest = tk.BooleanVar(value=False)
-        chk_p1_guest = tk.Checkbutton(
-            p1_box,
-            text="Play as Guest",
-            variable=self.var_p1_guest,
-            font=(FONT_NAME, 8),
-            bg=THEME['surface'],
-            fg=THEME['text_muted'],
-            selectcolor=THEME['surface_light'],
-            activebackground=THEME['surface'],
-            activeforeground=THEME['text'],
-            command=self._toggle_p1_guest
-        )
-        chk_p1_guest.pack(side=tk.LEFT, padx=(8, 0))
-
         if self.mode == 'PvP':
             # ================= PVP MODE SETTINGS =================
             row += 1
@@ -94,21 +79,6 @@ class ConfigView(tk.Frame):
                 relief=tk.FLAT
             )
             self.ent_p2_name.pack(side=tk.LEFT)
-
-            self.var_p2_guest = tk.BooleanVar(value=False)
-            self.chk_p2_guest = tk.Checkbutton(
-                self.p2_box,
-                text="Play as Guest",
-                variable=self.var_p2_guest,
-                font=(FONT_NAME, 8),
-                bg=THEME['surface'],
-                fg=THEME['text_muted'],
-                selectcolor=THEME['surface_light'],
-                activebackground=THEME['surface'],
-                activeforeground=THEME['text'],
-                command=self._toggle_p2_guest
-            )
-            self.chk_p2_guest.pack(side=tk.LEFT, padx=(8, 0))
 
             # Mode Selection: Local vs Online
             row += 1
@@ -222,38 +192,21 @@ class ConfigView(tk.Frame):
         ButtonSecondary(btn_box, text="Back to Hub", command=lambda: self.app.show_view('menu')).pack(side=tk.LEFT)
         ButtonPrimary(btn_box, text="Start Game", command=self._start_game).pack(side=tk.RIGHT)
 
-    def _toggle_p1_guest(self):
-        if self.var_p1_guest.get():
-            self.var_p1_name.set(storage.generate_guest_name())
-        else:
-            self.var_p1_name.set(self.last_name or "Player 1")
-
-    def _toggle_p2_guest(self):
-        if hasattr(self, 'var_p2_guest') and self.var_p2_guest.get():
-            self.var_p2_name.set(storage.generate_guest_name())
-        elif hasattr(self, 'var_p2_name'):
-            self.var_p2_name.set("Player 2")
-
     def _on_pvp_type_change(self, val: str):
         if val == "Online":
             self.net_box.grid()
             self.lbl_p2_title.config(text="Opponent Status:")
             self.ent_p2_name.config(state=tk.DISABLED)
             self.var_p2_name.set("Remote Opponent (Wait for connect)")
-            self.chk_p2_guest.pack_forget()
         else:
             self.net_box.grid_remove()
             self.lbl_p2_title.config(text="Player 2 Name:")
             self.ent_p2_name.config(state=tk.NORMAL)
             self.var_p2_name.set("Player 2")
-            self.chk_p2_guest.pack(side=tk.LEFT, padx=(8, 0))
 
     def _start_game(self):
         p1_val = self.var_p1_name.get().strip() or "Player 1"
-        is_guest_1 = self.var_p1_guest.get() or p1_val.lower().startswith("guest")
-
-        if not is_guest_1:
-            storage.save_last_username(p1_val)
+        storage.save_last_username(p1_val)
 
         p1_color = COLOR_PALETTES.get(self.var_p1_color.get(), '#2ECC71')
         p2_color = COLOR_PALETTES.get(self.var_p2_color.get(), '#E74C3C')
@@ -269,7 +222,6 @@ class ConfigView(tk.Frame):
         }
 
         p2_val = "AI Opponent"
-        is_guest_2 = False
         pvp_type = "Local"
         is_host = True
         ip = "127.0.0.1"
@@ -279,7 +231,6 @@ class ConfigView(tk.Frame):
             pvp_type = self.seg_pvp.get()
             if pvp_type == 'Local':
                 p2_val = self.var_p2_name.get().strip() or "Player 2"
-                is_guest_2 = self.var_p2_guest.get() or p2_val.lower().startswith("guest")
             else:
                 is_host = (self.seg_net_role.get() == "Host")
                 ip = self.ent_ip.get().strip() or "127.0.0.1"
@@ -299,9 +250,7 @@ class ConfigView(tk.Frame):
         config = {
             'mode': self.mode,
             'p1_name': p1_val,
-            'is_guest_1': is_guest_1,
             'p2_name': p2_val,
-            'is_guest_2': is_guest_2,
             'difficulty': diff,
             'pvp_type': pvp_type,
             'is_host': is_host,

@@ -158,8 +158,6 @@ class LeaderboardView(tk.Frame):
                 t_val = r.get('time_left', 0)
                 t_str = f"{t_val // 60}:{t_val % 60:02d}" if t_val >= 0 else "Unlimited"
                 uname = r['username']
-                if r.get('is_guest'):
-                    uname += " [Guest]"
                 self.tree.insert("", tk.END, iid=r['id'], values=(
                     i + 1, uname, r.get('difficulty', 'Normal'),
                     r['turns'], t_str, r['undos'], r['timestamp']
