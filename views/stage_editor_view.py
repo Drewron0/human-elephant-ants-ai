@@ -13,7 +13,7 @@ from puzzle_logic import find_optimal_winning_path, PuzzleScenario
 class StageEditorView(tk.Frame):
     """
     Apple-styled Stage Editor providing full CRUD for custom Chess-Sut puzzle stages.
-    Includes visual board editor, piece palette, and real-time winnability verification.
+    Includes visual board editor, piece palette, and manual winnability verification.
     """
     def __init__(self, parent, app, edit_stage: Optional[Any] = None, stage: Optional[Any] = None, stage_to_edit: Optional[Any] = None, **kwargs):
         super().__init__(parent, bg=THEME['bg'])
@@ -54,7 +54,6 @@ class StageEditorView(tk.Frame):
 
         self._build_ui()
         self._bind_shortcuts()
-        self._verify_winnability(silent=True)
 
     def _bind_shortcuts(self):
         self.app.bind("<Key-1>", lambda e: self._set_tool('P0_H'))
@@ -248,7 +247,7 @@ class StageEditorView(tk.Frame):
             w = max(440, self.left_pane.winfo_width())
             h = max(440, self.left_pane.winfo_height())
             self._apply_pane_resize(w, h)
-            self._verify_winnability(silent=True)
+            self._invalidate_verification()
 
     def _draw_board(self):
         self.canvas.delete("all")
@@ -296,7 +295,7 @@ class StageEditorView(tk.Frame):
         if (r, c) in self.placed_pieces:
             del self.placed_pieces[(r, c)]
             self._draw_board()
-            self._verify_winnability(silent=True)
+            self._invalidate_verification()
 
     def _on_canvas_click(self, event):
         size = self.board_size
@@ -316,7 +315,7 @@ class StageEditorView(tk.Frame):
             self.placed_pieces[(r, c)] = (owner, pt)
 
         self._draw_board()
-        self._verify_winnability(silent=True)
+        self._invalidate_verification()
 
     def _clear_board(self):
         self.placed_pieces.clear()
@@ -327,7 +326,12 @@ class StageEditorView(tk.Frame):
         self.placed_pieces[(2, 3)] = (1, 'E')
         self.placed_pieces[(1, 4)] = (1, 'H')
         self._draw_board()
-        self._verify_winnability(silent=True)
+        self._invalidate_verification()
+
+    def _invalidate_verification(self):
+        self.last_verification = None
+        self.lbl_verify_status.config(text="Winnability: Unverified", fg=THEME['warning'])
+        self.lbl_verify_detail.config(text="Board changed. Click verify to check safe path.")
 
     def _verify_winnability(self, silent: bool = False) -> bool:
         target_coord = (0, self.board_size - 1)
