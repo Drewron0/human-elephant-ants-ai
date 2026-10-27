@@ -52,8 +52,8 @@ class GameApp(tk.Tk):
         elif view_name == 'puzzle_select':
             self.current_view = PuzzleSelectView(self.container, self)
         elif view_name == 'stage_editor':
-            stage_to_edit = kwargs.get('stage', None)
-            self.current_view = StageEditorView(self.container, self, stage_to_edit=stage_to_edit)
+            stage_to_edit = kwargs.get('edit_stage') or kwargs.get('stage') or kwargs.get('stage_to_edit')
+            self.current_view = StageEditorView(self.container, self, edit_stage=stage_to_edit)
         elif view_name == 'config':
             mode = kwargs.get('mode', 'PvE')
             if mode == 'Puzzle':
