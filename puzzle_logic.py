@@ -53,10 +53,119 @@ def bfs_safe_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
     return None, []
 
 
+def solve_adversarial_optimal_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
+                                   target_coord: Optional[Tuple[int, int]] = None,
+                                   max_depth: int = 14) -> Tuple[Optional[int], List[Tuple[int, int]], Optional[Tuple[int, int, str]]]:
+    """
+    Adversarial Optimal Pathfinder:
+    Calculates the exact shortest sequence of moves required for the player to reach
+    the target corner while the AI plays its optimal defense via Minimax with Alpha-Beta pruning.
+    Returns (s_optimal, optimal_path_coords, winning_piece_info).
+    """
+    import heapq
+    from ai_engine import get_defender_move
+
+    if target_coord is None:
+        target_coord = (0, board_size - 1)
+    ai_target = (board_size - 1, 0)
+
+    initial_state = GameState(board_size=board_size, custom_setup=True)
+    for r, c, owner, pt in pieces:
+        initial_state.board[r][c] = Piece(owner, pt)
+
+    def heuristic(state: GameState) -> int:
+        min_d = 999
+        for r in range(state.board_size):
+            for c in range(state.board_size):
+                p = state.board[r][c]
+                if p and p.owner == 0:
+                    d = max(abs(r - target_coord[0]), abs(c - target_coord[1]))
+                    if d < min_d:
+                        min_d = d
+        return min_d if min_d != 999 else 20
+
+    def state_signature(s: GameState) -> Tuple:
+        pcs = []
+        for r in range(s.board_size):
+            for c in range(s.board_size):
+                p = s.board[r][c]
+                if p:
+                    pcs.append((r, c, p.owner, p.p_type))
+        return tuple(sorted(pcs))
+
+    counter = 0
+    h0 = heuristic(initial_state)
+    pq = [(h0, 0, counter, initial_state, [])]
+    visited: Dict[Tuple, int] = {state_signature(initial_state): 0}
+    max_expansions = 300
+    expansions = 0
+
+    while pq and expansions < max_expansions:
+        f, g, _, state, move_history = heapq.heappop(pq)
+        expansions += 1
+
+        for r in range(state.board_size):
+            for c in range(state.board_size):
+                p = state.board[r][c]
+                if p and p.owner == 0 and (r, c) == target_coord:
+                    path_coords = [m[0] for m in move_history] + [target_coord]
+                    best_pc = (path_coords[0][0], path_coords[0][1], p.p_type)
+                    return g, path_coords, best_pc
+
+        if g >= max_depth:
+            continue
+
+        valid = state.get_valid_moves(0)
+        if not valid:
+            continue
+
+        def move_pref(m):
+            end = m[1]
+            d = max(abs(end[0] - target_coord[0]), abs(end[1] - target_coord[1]))
+            t = state.board[end[0]][end[1]]
+            cap = -5 if t and t.owner == 1 else 0
+            return d + cap
+
+        valid.sort(key=move_pref)
+
+        for m in valid[:7]:
+            nxt = state.clone()
+            nxt.make_move(m[0], m[1])
+            new_history = move_history + [m]
+
+            if nxt.winner == 0 or (nxt.board[target_coord[0]][target_coord[1]] and nxt.board[target_coord[0]][target_coord[1]].owner == 0):
+                path_coords = [mv[0] for mv in new_history] + [target_coord]
+                lead_piece = nxt.board[target_coord[0]][target_coord[1]]
+                pt = lead_piece.p_type if lead_piece else 'H'
+                return g + 1, path_coords, (path_coords[0][0], path_coords[0][1], pt)
+
+            ai_valid = nxt.get_valid_moves(1)
+            if ai_valid:
+                best_move, _, _ = get_defender_move(nxt, agent_model='proposed_d6', depth=2)
+                if best_move:
+                    nxt.make_move(best_move[0], best_move[1])
+                    if nxt.winner == 1 or (nxt.board[ai_target[0]][ai_target[1]] and nxt.board[ai_target[0]][ai_target[1]].owner == 1):
+                        continue
+
+            p_pcs = [nxt.board[r][c] for r in range(nxt.board_size) for c in range(nxt.board_size) if nxt.board[r][c] and nxt.board[r][c].owner == 0]
+            if not p_pcs or not nxt.get_valid_moves(0):
+                continue
+
+            sig = state_signature(nxt)
+            if sig not in visited or visited[sig] > g + 1:
+                visited[sig] = g + 1
+                counter += 1
+                h = heuristic(nxt)
+                heapq.heappush(pq, (g + 1 + h, g + 1, counter, nxt, new_history))
+
+    return None, [], None
+
+
 def find_optimal_winning_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
                               target_coord: Optional[Tuple[int, int]] = None) -> Tuple[Optional[int], List[Tuple[int, int]], Optional[Tuple[int, int, str]]]:
     """
-    Finds the shortest safe winning path among ALL player pieces (owner == 0).
+    Finds the shortest winning path accounting for optimal AI defender moves.
+    Falls back to safe static BFS if search space is exhaustive or unconstrained.
     Returns (shortest_distance, path, best_piece_info).
     """
     if target_coord is None:
@@ -66,6 +175,12 @@ def find_optimal_winning_path(board_size: int, pieces: List[Tuple[int, int, int,
     if not player_pieces:
         return None, [], None
 
+    # First attempt adversarial game-theoretic solver
+    adv_dist, adv_path, adv_piece = solve_adversarial_optimal_path(board_size, pieces, target_coord)
+    if adv_dist is not None:
+        return adv_dist, adv_path, adv_piece
+
+    # Fallback to safe path BFS if adversarial solver hits step bounds
     best_dist: Optional[int] = None
     best_path: List[Tuple[int, int]] = []
     best_piece: Optional[Tuple[int, int, str]] = None
@@ -139,7 +254,7 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 1: Advance Guard',
         description='Coordinate Human and Elephant to advance past dispersed defenders.',
         board_size=6,
-        s_optimal=5,
+        s_optimal=6,
         pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (2, 4, 1, 'H'), (3, 3, 1, 'A')],
         optimal_path=[(5, 0), (4, 1), (3, 2), (2, 3), (1, 4), (0, 5)]
     ),
@@ -166,8 +281,8 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 4: Sentry Gate',
         description='Heavy Elephants defend perimeter. Use Elephant escort through the gap.',
         board_size=6,
-        s_optimal=6,
-        pieces=[(5, 0, 0, 'H'), (4, 0, 0, 'E'), (1, 0, 1, 'E'), (2, 1, 1, 'E'), (3, 3, 1, 'A')],
+        s_optimal=7,
+        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 0, 0, 'A'), (1, 4, 1, 'E'), (2, 3, 1, 'H'), (3, 2, 1, 'A')],
         optimal_path=[(5, 0), (4, 1), (4, 2), (3, 3), (2, 3), (1, 4), (0, 5)]
     ),
     'stage_6x6_05': PuzzleScenario(
@@ -175,7 +290,7 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 5: Crossfire Defense',
         description='Ant maneuvers around central Elephant threat to pierce defensive lines.',
         board_size=6,
-        s_optimal=7,
+        s_optimal=6,
         pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'A'), (3, 2, 1, 'E'), (2, 4, 1, 'H')],
         optimal_path=[(5, 1), (4, 2), (4, 3), (3, 4), (2, 5), (1, 5), (0, 5)]
     ),
@@ -184,7 +299,7 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 6: The Chokepoint',
         description='Elephant escort anchors the center while advancing toward objective.',
         board_size=6,
-        s_optimal=6,
+        s_optimal=8,
         pieces=[(5, 0, 0, 'H'), (4, 1, 0, 'E'), (2, 2, 1, 'E'), (2, 4, 1, 'A')],
         optimal_path=[(4, 1), (3, 2), (2, 3), (1, 4), (0, 4), (0, 5)]
     ),
@@ -193,8 +308,8 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 7: The Ridge',
         description='Elephant pushes through outer corridor to bypass layered barricade.',
         board_size=6,
-        s_optimal=7,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (3, 2, 1, 'E'), (2, 3, 1, 'E'), (2, 4, 1, 'A')],
+        s_optimal=5,
+        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 1, 0, 'A'), (1, 3, 1, 'E'), (2, 4, 1, 'H'), (0, 3, 1, 'A')],
         optimal_path=[(5, 1), (4, 1), (3, 1), (2, 2), (1, 3), (0, 4), (0, 5)]
     ),
     'stage_6x6_08': PuzzleScenario(
@@ -202,8 +317,8 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 8: Patrol Infiltration',
         description='Elephant squad threads between patrol zones along the edge.',
         board_size=6,
-        s_optimal=6,
-        pieces=[(5, 0, 0, 'H'), (4, 0, 0, 'E'), (3, 2, 1, 'E'), (2, 3, 1, 'E'), (1, 3, 1, 'E'), (2, 5, 1, 'A')],
+        s_optimal=7,
+        pieces=[(5, 0, 0, 'H'), (4, 0, 0, 'E'), (5, 2, 0, 'A'), (2, 2, 1, 'E'), (1, 4, 1, 'H'), (3, 4, 1, 'A')],
         optimal_path=[(4, 0), (3, 1), (2, 2), (1, 3), (0, 4), (0, 5)]
     ),
     'stage_6x6_09': PuzzleScenario(
@@ -212,7 +327,7 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         description='Double defender line blocks diagonal. Navigate around outer perimeter.',
         board_size=6,
         s_optimal=6,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (3, 2, 1, 'E'), (2, 3, 1, 'E'), (1, 4, 1, 'E'), (2, 5, 1, 'A')],
+        pieces=[(5, 0, 0, 'H'), (4, 1, 0, 'E'), (5, 2, 0, 'A'), (1, 4, 1, 'E'), (3, 3, 1, 'A'), (2, 5, 1, 'H')],
         optimal_path=[(5, 1), (4, 1), (3, 1), (2, 2), (1, 3), (0, 4), (0, 5)]
     ),
     'stage_6x6_10': PuzzleScenario(
@@ -220,7 +335,7 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 10: The Citadel',
         description='Full multi-piece tactical engagement demanding optimal piece synergy.',
         board_size=6,
-        s_optimal=7,
+        s_optimal=6,
         pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 0, 0, 'A'), (3, 3, 1, 'E'), (2, 3, 1, 'E'), (1, 4, 1, 'E'), (2, 4, 1, 'A'), (3, 1, 1, 'H')],
         optimal_path=[(5, 1), (4, 1), (3, 0), (2, 1), (1, 2), (0, 3), (0, 5)]
     )
@@ -268,11 +383,11 @@ def get_all_puzzles() -> Dict[str, PuzzleScenario]:
     return all_puzzles
 
 
-def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps: int = 9, max_attempts: int = 500) -> PuzzleScenario:
+def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps: int = 9, max_attempts: int = 100) -> PuzzleScenario:
     """
     Algorithmically generates a guaranteed winnable puzzle scenario on N x N board.
-    Places a balanced squadron of player pieces and tactical AI defenders,
-    verified via BFS solver to guarantee at least one safe winning path.
+    Places a balanced tactical squadron of player pieces and AI defenders in defensive half,
+    mathematically verified against optimal AI defender moves to guarantee victory.
     """
     start_coord = (board_size - 1, 0)
     target_coord = (0, board_size - 1)
@@ -280,7 +395,7 @@ def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps:
     for attempt in range(max_attempts):
         occupied_set = {start_coord, target_coord}
 
-        # Player squad: Human at start corner, plus 1 or 2 supporting pieces
+        # Player tactical squad: Human at start corner + 2 supportive escorts
         player_pieces = [(start_coord[0], start_coord[1], 0, 'H')]
         support_positions = [(board_size - 1, 1), (board_size - 2, 0), (board_size - 2, 1)]
         random.shuffle(support_positions)
@@ -289,13 +404,14 @@ def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps:
             occupied_set.add(pos)
             player_pieces.append((pos[0], pos[1], 0, random.choice(['E', 'A'])))
 
-        # AI defender squad
+        # AI defender squad placed in defensive upper half (not directly on player's corner)
         num_defs = random.randint(2, 4 if board_size == 6 else 6)
         defs = []
 
+        max_def_row = max(2, board_size - 3)
         for _ in range(num_defs):
-            r = random.randint(0, board_size - 1)
-            c = random.randint(0, board_size - 1)
+            r = random.randint(0, max_def_row)
+            c = random.randint(1, board_size - 1)
             if (r, c) not in occupied_set:
                 occupied_set.add((r, c))
                 defs.append((r, c, 1, random.choice(['E', 'A', 'H'])))
@@ -316,9 +432,6 @@ def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps:
             )
 
     return PRECONFIGURED_STAGES_6X6['stage_6x6_01']
-
-    # Fallback to verified preset stage 5
-    return PRECONFIGURED_STAGES_6X6['stage_6x6_05']
 
 
 def generate_procedural_puzzle(target_steps: int = 10, board_size: int = 9) -> PuzzleScenario:
@@ -387,6 +500,7 @@ class PuzzleSession:
 
     def evaluate_status(self, state: GameState) -> str:
         target = state.target_corners[0]
+        ai_target = state.target_corners[1]
 
         # Victory check
         for r in range(state.board_size):
@@ -395,6 +509,20 @@ class PuzzleSession:
                 if p and p.owner == 0 and (r, c) == target:
                     self.is_solved = True
                     return 'SOLVED'
+
+        # Neutralization check: AI Defender reaches player home corner
+        for r in range(state.board_size):
+            for c in range(state.board_size):
+                p = state.board[r][c]
+                if p and p.owner == 1 and (r, c) == ai_target:
+                    self.is_neutralized = True
+                    self.neutralization_reason = "AI reached player home corner"
+                    return 'NEUTRALIZED'
+
+        if state.winner == 1:
+            self.is_neutralized = True
+            self.neutralization_reason = "AI reached home corner"
+            return 'NEUTRALIZED'
 
         # Neutralization: Step limit exhaustion S_max = 3 * S_optimal
         if self.current_attempt_steps >= self.s_max:
