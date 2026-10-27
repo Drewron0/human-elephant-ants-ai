@@ -79,7 +79,7 @@ class LeaderboardView(tk.Frame):
         self.seg_sort.pack(side=tk.LEFT)
 
         # Table Container
-        table_card = tk.Frame(
+        self.table_card = tk.Frame(
             container,
             bg=THEME['surface'],
             bd=1,
@@ -87,13 +87,13 @@ class LeaderboardView(tk.Frame):
             highlightbackground=THEME['border'],
             highlightthickness=1
         )
-        table_card.pack(fill=tk.BOTH, expand=True)
+        self.table_card.pack(fill=tk.BOTH, expand=True)
 
         # Treeview with wide columns to NEVER cut off text
-        self.tree = ttk.Treeview(table_card, show="headings", selectmode="browse")
+        self.tree = ttk.Treeview(self.table_card, show="headings", selectmode="browse")
 
-        scroll_y = ttk.Scrollbar(table_card, orient=tk.VERTICAL, command=self.tree.yview)
-        scroll_x = ttk.Scrollbar(table_card, orient=tk.HORIZONTAL, command=self.tree.xview)
+        scroll_y = ttk.Scrollbar(self.table_card, orient=tk.VERTICAL, command=self.tree.yview)
+        scroll_x = ttk.Scrollbar(self.table_card, orient=tk.HORIZONTAL, command=self.tree.xview)
         self.tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
 
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -113,7 +113,7 @@ class LeaderboardView(tk.Frame):
     def _set_tab(self, tab: str):
         self.current_tab = tab
         if tab == "pve":
-            self.pve_toolbar.pack(fill=tk.X, pady=(0, 8))
+            self.pve_toolbar.pack(fill=tk.X, pady=(0, 8), before=self.table_card)
             self.btn_clear_cat.pack(side=tk.LEFT, padx=(0, 6))
         else:
             self.pve_toolbar.pack_forget()
