@@ -40,19 +40,11 @@ class PuzzleSelectView(tk.Frame):
 
         tk.Label(
             title_box,
-            text="Puzzle & Stage Selection",
+            text="Puzzle Stages",
             font=(FONT_NAME, 13, "bold"),
             bg=THEME['surface'],
             fg=THEME['text']
         ).pack(side=tk.LEFT)
-
-        tk.Label(
-            title_box,
-            text="— Select a tactical scenario or build your custom stage",
-            font=(FONT_NAME, 9),
-            bg=THEME['surface'],
-            fg=THEME['text_muted']
-        ).pack(side=tk.LEFT, padx=(8, 0))
 
         ButtonSecondary(top_bar, text="Back to Main Menu", command=lambda: self.app.show_view('menu')).pack(side=tk.RIGHT, padx=16, pady=8)
         ButtonPrimary(top_bar, text="+ Create Custom Stage", command=self._open_stage_editor).pack(side=tk.RIGHT, padx=(0, 8), pady=8)
@@ -69,16 +61,16 @@ class PuzzleSelectView(tk.Frame):
         tab_frame = tk.Frame(self.left_pane, bg=THEME['surface_card'], padx=6, pady=4)
         tab_frame.pack(fill=tk.X, padx=16, pady=(12, 8))
 
-        self.btn_tab_preset = ButtonSecondary(tab_frame, text="10 Preset 6x6 Stages", command=lambda: self._set_category("preset_6x6"))
+        self.btn_tab_preset = ButtonSecondary(tab_frame, text="Standard (6x6)", command=lambda: self._set_category("preset_6x6"))
         self.btn_tab_preset.pack(side=tk.LEFT, padx=3)
 
-        self.btn_tab_9x9 = ButtonSecondary(tab_frame, text="Classic 9x9 Benchmark", command=lambda: self._set_category("preset_9x9"))
+        self.btn_tab_9x9 = ButtonSecondary(tab_frame, text="Large Board (9x9)", command=lambda: self._set_category("preset_9x9"))
         self.btn_tab_9x9.pack(side=tk.LEFT, padx=3)
 
         self.btn_tab_custom = ButtonSecondary(tab_frame, text="Custom Stages", command=lambda: self._set_category("custom"))
         self.btn_tab_custom.pack(side=tk.LEFT, padx=3)
 
-        self.btn_tab_random = ButtonSecondary(tab_frame, text="Random Winnable", command=lambda: self._set_category("random"))
+        self.btn_tab_random = ButtonSecondary(tab_frame, text="Random Challenge", command=lambda: self._set_category("random"))
         self.btn_tab_random.pack(side=tk.LEFT, padx=3)
 
         # Scrollable Grid of Stage Thumbnails
@@ -86,7 +78,7 @@ class PuzzleSelectView(tk.Frame):
         grid_container.pack(fill=tk.BOTH, expand=True, padx=16, pady=(0, 12))
 
         self.grid_canvas = tk.Canvas(grid_container, bg=THEME['bg'], highlightthickness=0)
-        grid_scroll = tk.Scrollbar(grid_container, orient=tk.VERTICAL, command=self.grid_canvas.yview)
+        grid_scroll = ttk.Scrollbar(grid_container, orient=tk.VERTICAL, command=self.grid_canvas.yview)
         self.scrollable_grid = tk.Frame(self.grid_canvas, bg=THEME['bg'])
 
         self.scrollable_grid.bind(
@@ -110,7 +102,7 @@ class PuzzleSelectView(tk.Frame):
 
     def _build_sidebar_ui(self):
         sidebar_scroll_canvas = tk.Canvas(self.right_pane, bg=THEME['surface'], highlightthickness=0)
-        scroll_y = tk.Scrollbar(self.right_pane, orient=tk.VERTICAL, command=sidebar_scroll_canvas.yview)
+        scroll_y = ttk.Scrollbar(self.right_pane, orient=tk.VERTICAL, command=sidebar_scroll_canvas.yview)
         content = tk.Frame(sidebar_scroll_canvas, bg=THEME['surface'], padx=16, pady=14)
 
         content.bind(
@@ -133,7 +125,7 @@ class PuzzleSelectView(tk.Frame):
         self.lbl_selected_desc = tk.Label(self.card_info, text="Stage description...", font=(FONT_NAME, 8), bg=THEME['surface_light'], fg=THEME['text_muted'], wraplength=270, justify="left")
         self.lbl_selected_desc.pack(anchor="w", pady=(3, 6))
 
-        self.lbl_selected_stats = tk.Label(self.card_info, text="6x6 Board • S_optimal = 6 • S_max = 18", font=(FONT_NAME, 8, "bold"), bg=THEME['surface_light'], fg=THEME['accent'])
+        self.lbl_selected_stats = tk.Label(self.card_info, text="6x6 Board | Optimal: 6 steps | Move Limit: 18", font=(FONT_NAME, 8, "bold"), bg=THEME['surface_light'], fg=THEME['accent'])
         self.lbl_selected_stats.pack(anchor="w")
 
         # Player Profile Selector
@@ -299,12 +291,12 @@ class PuzzleSelectView(tk.Frame):
             target = (0, puzzle.board_size - 1)
             draw_board_thumbnail(thumb_canvas, puzzle.board_size, puzzle.pieces, target, width=130, height=130)
 
-            # Title
-            lbl_title = tk.Label(card, text=puzzle.title, font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=THEME['text'], wraplength=130)
-            lbl_title.pack(anchor="w")
+            # Title (Centered)
+            lbl_title = tk.Label(card, text=puzzle.title, font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=THEME['text'], wraplength=130, justify="center")
+            lbl_title.pack(anchor="center", fill=tk.X)
 
-            lbl_sub = tk.Label(card, text=f"{puzzle.board_size}x{puzzle.board_size} • {puzzle.s_optimal} steps", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'])
-            lbl_sub.pack(anchor="w")
+            lbl_sub = tk.Label(card, text=f"{puzzle.board_size}x{puzzle.board_size} | {puzzle.s_optimal} steps", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'], justify="center")
+            lbl_sub.pack(anchor="center", fill=tk.X, pady=(2, 0))
 
             # Click binding on all children
             def bind_click(w, p_id=puzzle.id):
@@ -348,7 +340,7 @@ class PuzzleSelectView(tk.Frame):
 
         self.lbl_selected_title.config(text=puzzle.title)
         self.lbl_selected_desc.config(text=puzzle.description or "Tactical puzzle scenario.")
-        self.lbl_selected_stats.config(text=f"{puzzle.board_size}x{puzzle.board_size} Board • S_optimal = {puzzle.s_optimal} • S_max = {puzzle.s_max}")
+        self.lbl_selected_stats.config(text=f"{puzzle.board_size}x{puzzle.board_size} Board | Optimal: {puzzle.s_optimal} steps | Move Limit: {puzzle.s_max}")
 
         if puzzle.is_custom:
             self.frame_custom_actions.pack(fill=tk.X, pady=(0, 8))
@@ -391,7 +383,7 @@ class PuzzleSelectView(tk.Frame):
 
             tk.Label(
                 row,
-                text=f"{steps} moves (ΔS:+{delta}) | {undos}u",
+                text=f"{steps} moves (Delay: +{delta}) | {undos}u",
                 font=(FONT_NAME, 8),
                 bg=THEME['surface_light'],
                 fg=THEME['accent'] if idx == 1 else THEME['text_muted']
