@@ -54,7 +54,7 @@ def main():
             results.append((agent_label, opp_label, res))
 
     print("\n" + "=" * 96)
-    print(f"{'Defender Model':<32} | {'Scripted Opponent':<24} | {'Tturn (s)':<10} | {'Prune %':<9} | {'ΔS (moves)':<10} | {'Rneut %':<8}")
+    print(f"{'Defender Model':<32} | {'Scripted Opponent':<24} | {'Tturn (s)':<10} | {'Prune %':<9} | {'dS (moves)':<10} | {'Rneut %':<8}")
     print("-" * 96)
 
     for agent_label, opp_label, r in results:
