@@ -3,37 +3,43 @@ from tkinter import ttk
 import math
 from typing import Callable, List, Optional, Any, Tuple
 
-FONT_NAME = "Trebuchet MS"
+# Restrained system typography adhering to Apple Design guidelines
+FONT_NAME = "Segoe UI"
 
+# Apple Design System Dark Palette: restrained, subtle depth, high legibility
 THEME = {
-    'bg': '#191A21',
-    'surface': '#22232E',
-    'surface_light': '#2E303E',
-    'border': '#3B3D4E',
-    'text': '#EBECEF',
-    'text_muted': '#8D90A3',
-    'accent': '#3D5AFE',
-    'accent_hover': '#536DFE',
-    'danger': '#E53935',
-    'danger_hover': '#D32F2F',
-    'board_light': '#E8ECEF',
-    'board_dark': '#9AA5B1',
-    'board_grid': '#57606A',
+    'bg': '#121214',
+    'surface': '#1C1C1E',
+    'surface_light': '#2C2C2E',
+    'surface_card': '#242426',
+    'border': '#38383A',
+    'border_subtle': '#262628',
+    'text': '#F2F2F7',
+    'text_muted': '#8E8E93',
+    'accent': '#0A84FF',
+    'accent_hover': '#0071E3',
+    'danger': '#FF453A',
+    'danger_hover': '#D70015',
+    'success': '#30D158',
+    'warning': '#FF9F0A',
+    'board_light': '#E5E5EA',
+    'board_dark': '#AEAEB2',
+    'board_grid': '#636366',
     'corner_p1': '#FFE082',
     'corner_p2': '#FFCDD2',
-    'move_dot': '#000000',
-    'capture_square': '#D32F2F',
-    'select_square': '#FFF59D',
-    'last_move': '#CFD8DC'
+    'move_dot': '#1C1C1E',
+    'capture_square': '#FF453A',
+    'select_square': '#FFE082',
+    'last_move': '#D1D1D6'
 }
 
 COLOR_PALETTES = {
-    'Emerald Green': '#2ECC71',
-    'Sapphire Blue': '#3498DB',
-    'Ruby Red': '#E74C3C',
-    'Amethyst Purple': '#9B59B6',
-    'Amber Orange': '#E67E22',
-    'Turquoise Cyan': '#1ABC9C'
+    'Emerald Green': '#30D158',
+    'Sapphire Blue': '#0A84FF',
+    'Ruby Red': '#FF453A',
+    'Amethyst Purple': '#BF5AF2',
+    'Amber Orange': '#FF9F0A',
+    'Turquoise Cyan': '#64D2FF'
 }
 
 HOTKEYS = {
@@ -58,7 +64,7 @@ def setup_ttk_styles(root: tk.Tk):
         lightcolor=THEME['border'],
         bordercolor=THEME['border'],
         arrowcolor=THEME['text'],
-        padding=4
+        padding=5
     )
     style.map(
         'TCombobox',
@@ -104,13 +110,62 @@ def draw_star(canvas: tk.Canvas, cx: float, cy: float, radius: float, fill: str,
     canvas.create_polygon(points, fill=fill, outline=outline, width=1)
 
 
+def draw_board_thumbnail(canvas: tk.Canvas, board_size: int, pieces: List[Tuple[int, int, int, str]],
+                         target_coord: Tuple[int, int], width: int = 140, height: int = 140,
+                         p1_color: str = '#30D158', p2_color: str = '#FF453A') -> None:
+    """Renders a clean, scalable mini-board thumbnail for the stage selection grid."""
+    canvas.delete("all")
+    usable_dim = min(width, height) - 8
+    cell_size = max(10, usable_dim // board_size)
+    total_grid_w = cell_size * board_size
+    total_grid_h = cell_size * board_size
+    offset_x = (width - total_grid_w) // 2
+    offset_y = (height - total_grid_h) // 2
+
+    canvas.create_rectangle(offset_x - 1, offset_y - 1, offset_x + total_grid_w + 1, offset_y + total_grid_h + 1,
+                            fill=THEME['surface_card'], outline=THEME['border'], width=1)
+
+    # Draw cells
+    for r in range(board_size):
+        for c in range(board_size):
+            x0 = offset_x + c * cell_size
+            y0 = offset_y + r * cell_size
+            x1 = x0 + cell_size
+            y1 = y0 + cell_size
+
+            fill = THEME['board_light'] if (r + c) % 2 == 0 else THEME['board_dark']
+            if (r, c) == target_coord:
+                fill = THEME['corner_p1']
+
+            canvas.create_rectangle(x0, y0, x1, y1, fill=fill, outline=THEME['board_grid'], width=1)
+
+            if (r, c) == target_coord:
+                draw_star(canvas, (x0 + x1) / 2, (y0 + y1) / 2, max(4, cell_size * 0.32), fill='#F57F17', outline='')
+
+    # Draw pieces
+    for r, c, owner, pt in pieces:
+        if 0 <= r < board_size and 0 <= c < board_size:
+            x0 = offset_x + c * cell_size
+            y0 = offset_y + r * cell_size
+            x1 = x0 + cell_size
+            y1 = y0 + cell_size
+            pad = max(2, cell_size // 6)
+            color = p1_color if owner == 0 else p2_color
+
+            canvas.create_oval(x0 + pad, y0 + pad, x1 - pad, y1 - pad, fill=color, outline='#FFFFFF', width=1)
+            if cell_size >= 16:
+                cx = (x0 + x1) // 2
+                cy = (y0 + y1) // 2
+                canvas.create_text(cx, cy, text=pt, font=(FONT_NAME, max(7, cell_size // 3), "bold"), fill='#FFFFFF')
+
+
 class ButtonPrimary(tk.Button):
     def __init__(self, parent, text: str, command: Optional[Callable] = None, width: Optional[int] = None, **kwargs):
         super().__init__(
             parent,
             text=text,
             command=command,
-            font=(FONT_NAME, 10, 'bold'),
+            font=(FONT_NAME, 9, 'bold'),
             bg=THEME['accent'],
             fg='#FFFFFF',
             activebackground=THEME['accent_hover'],
@@ -131,7 +186,7 @@ class ButtonSecondary(tk.Button):
             parent,
             text=text,
             command=command,
-            font=(FONT_NAME, 9, 'bold'),
+            font=(FONT_NAME, 9),
             bg=THEME['surface_light'],
             fg=THEME['text'],
             activebackground=THEME['border'],
@@ -152,7 +207,7 @@ class ButtonDanger(tk.Button):
             parent,
             text=text,
             command=command,
-            font=(FONT_NAME, 9, 'bold'),
+            font=(FONT_NAME, 9),
             bg=THEME['danger'],
             fg='#FFFFFF',
             activebackground=THEME['danger_hover'],
@@ -168,9 +223,9 @@ class ButtonDanger(tk.Button):
 
 
 class SegmentedControl(tk.Frame):
-    """Clean custom segmented button group that never turns black or glitches."""
+    """Clean custom segmented button group with Apple-like pill aesthetics."""
     def __init__(self, parent, options: List[Tuple[str, str]], default_val: str, on_change: Optional[Callable[[str], None]] = None):
-        super().__init__(parent, bg=THEME['surface_light'], bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
+        super().__init__(parent, bg=THEME['surface_card'], bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
         self.options = options
         self.selected_val = default_val
         self.on_change = on_change
@@ -180,7 +235,7 @@ class SegmentedControl(tk.Frame):
             btn = tk.Button(
                 self,
                 text=text,
-                font=(FONT_NAME, 9, 'bold'),
+                font=(FONT_NAME, 9),
                 bd=0,
                 relief=tk.FLAT,
                 cursor='hand2',
@@ -204,7 +259,7 @@ class SegmentedControl(tk.Frame):
             if val == self.selected_val:
                 btn.config(bg=THEME['accent'], fg='#FFFFFF', activebackground=THEME['accent'], activeforeground='#FFFFFF')
             else:
-                btn.config(bg=THEME['surface_light'], fg=THEME['text'], activebackground=THEME['border'], activeforeground=THEME['text'])
+                btn.config(bg=THEME['surface_card'], fg=THEME['text_muted'], activebackground=THEME['border'], activeforeground=THEME['text'])
 
     def get(self) -> str:
         return self.selected_val
@@ -212,14 +267,14 @@ class SegmentedControl(tk.Frame):
 
 class ThemedModal(tk.Frame):
     """
-    Robust in-window modal dialog that dynamically fits content and guarantees
+    In-window modal dialog that dynamically fits content and guarantees
     the header and footer buttons are never cutoff on any screen resolution.
     """
     def __init__(self, parent, title: str, min_width: int = 460):
         super().__init__(parent, bg='#000000')
         self.place(relx=0, rely=0, relwidth=1, relheight=1)
 
-        self.backdrop = tk.Frame(self, bg='#101116')
+        self.backdrop = tk.Frame(self, bg='#0E0E10')
         self.backdrop.place(relx=0, rely=0, relwidth=1, relheight=1)
 
         self.card = tk.Frame(
@@ -238,7 +293,7 @@ class ThemedModal(tk.Frame):
         tk.Label(
             header,
             text=title,
-            font=(FONT_NAME, 13, 'bold'),
+            font=(FONT_NAME, 12, 'bold'),
             bg=THEME['surface'],
             fg=THEME['text']
         ).pack(side=tk.LEFT)
