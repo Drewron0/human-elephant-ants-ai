@@ -43,12 +43,13 @@ class MainMenuView(tk.Frame):
         )
         card.pack()
 
-        w = 26
-        ButtonPrimary(card, text="Puzzle Mode (Chess-Sut Defender)", command=lambda: self.app.open_config('Puzzle'), width=w).pack(pady=5)
-        ButtonSecondary(card, text="Play vs AI (PvE)", command=lambda: self.app.open_config('PvE'), width=w).pack(pady=5)
-        ButtonSecondary(card, text="Play vs Player (PvP)", command=lambda: self.app.open_config('PvP'), width=w).pack(pady=5)
-        ButtonSecondary(card, text="Simulation & Benchmark Lab", command=lambda: self.app.show_view('benchmark'), width=w).pack(pady=5)
-        ButtonSecondary(card, text="Load Saved Game", command=lambda: self.app.show_view('saves'), width=w).pack(pady=5)
-        ButtonSecondary(card, text="Leaderboard and Records", command=lambda: self.app.show_view('leaderboard'), width=w).pack(pady=5)
-        ButtonSecondary(card, text="How to Play", command=lambda: self.app.show_view('tutorial'), width=w).pack(pady=5)
-        ButtonDanger(card, text="Quit Application", command=self.app.destroy, width=w).pack(pady=(12, 4))
+        w = 28
+        ButtonPrimary(card, text="Puzzle Mode (Chess-Sut Defender)", command=lambda: self.app.show_view('puzzle_select'), width=w).pack(pady=4)
+        ButtonSecondary(card, text="Custom Stage Editor", command=lambda: self.app.show_view('stage_editor'), width=w).pack(pady=4)
+        ButtonSecondary(card, text="Play vs AI (PvE)", command=lambda: self.app.open_config('PvE'), width=w).pack(pady=4)
+        ButtonSecondary(card, text="Play vs Player (PvP)", command=lambda: self.app.open_config('PvP'), width=w).pack(pady=4)
+        ButtonSecondary(card, text="Simulation & Benchmark Lab", command=lambda: self.app.show_view('benchmark'), width=w).pack(pady=4)
+        ButtonSecondary(card, text="Load Saved Game", command=lambda: self.app.show_view('saves'), width=w).pack(pady=4)
+        ButtonSecondary(card, text="Leaderboard and Records", command=lambda: self.app.show_view('leaderboard'), width=w).pack(pady=4)
+        ButtonSecondary(card, text="How to Play", command=lambda: self.app.show_view('tutorial'), width=w).pack(pady=4)
+        ButtonDanger(card, text="Quit Application", command=self.app.destroy, width=w).pack(pady=(10, 4))

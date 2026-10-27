@@ -5,6 +5,8 @@ from views.menu_view import MainMenuView
 from views.config_view import ConfigView
 from views.game_view import GameView
 from views.puzzle_game_view import PuzzleGameView
+from views.puzzle_select_view import PuzzleSelectView
+from views.stage_editor_view import StageEditorView
 from views.benchmark_view import BenchmarkView
 from views.leaderboard_view import LeaderboardView
 from views.saves_view import SavedGamesView
@@ -47,9 +49,17 @@ class GameApp(tk.Tk):
 
         if view_name == 'menu':
             self.current_view = MainMenuView(self.container, self)
+        elif view_name == 'puzzle_select':
+            self.current_view = PuzzleSelectView(self.container, self)
+        elif view_name == 'stage_editor':
+            stage_to_edit = kwargs.get('stage', None)
+            self.current_view = StageEditorView(self.container, self, stage_to_edit=stage_to_edit)
         elif view_name == 'config':
             mode = kwargs.get('mode', 'PvE')
-            self.current_view = ConfigView(self.container, self, mode=mode)
+            if mode == 'Puzzle':
+                self.current_view = PuzzleSelectView(self.container, self)
+            else:
+                self.current_view = ConfigView(self.container, self, mode=mode)
         elif view_name == 'game':
             config = kwargs.get('config', {})
             saved_state = kwargs.get('saved_state', None)
@@ -70,7 +80,10 @@ class GameApp(tk.Tk):
             self.current_view.pack(fill=tk.BOTH, expand=True)
 
     def open_config(self, mode: str):
-        self.show_view('config', mode=mode)
+        if mode == 'Puzzle':
+            self.show_view('puzzle_select')
+        else:
+            self.show_view('config', mode=mode)
 
     def start_game(self, config: Dict[str, Any], saved_state: Optional[Dict[str, Any]] = None):
         self.show_view('game', config=config, saved_state=saved_state)
