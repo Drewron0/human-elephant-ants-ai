@@ -3,6 +3,7 @@ import time
 from collections import deque
 from typing import List, Tuple, Dict, Any, Optional
 from game_logic import GameState, Piece, BEATS, PREDATORS
+import storage
 
 
 def bfs_safe_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
@@ -19,7 +20,6 @@ def bfs_safe_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
     for r, c, owner, pt in pieces:
         occupied[(r, c)] = (owner, pt)
         if owner == 1 and BEATS.get(pt) == player_type:
-            # This defender piece defeats the player piece
             for dr in (-1, 0, 1):
                 for dc in (-1, 0, 1):
                     nr, nc = r + dr, c + dc
@@ -43,9 +43,9 @@ def bfs_safe_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
                     if (nr, nc) in occupied:
                         occ_owner, occ_type = occupied[(nr, nc)]
                         if occ_owner == 0 or BEATS.get(player_type) != occ_type:
-                            continue  # Cannot capture friendly piece or non-prey
+                            continue
                     elif (nr, nc) in danger and (nr, nc) != target_coord:
-                        continue  # Threat zone
+                        continue
 
                     vis.add((nr, nc))
                     q.append((nr, nc, d + 1, path + [(nr, nc)]))
@@ -57,7 +57,8 @@ class PuzzleScenario:
     def __init__(self, id_str: str, title: str, description: str,
                  board_size: int, s_optimal: int,
                  pieces: List[Tuple[int, int, int, str]],
-                 optimal_path: Optional[List[Tuple[int, int]]] = None):
+                 optimal_path: Optional[List[Tuple[int, int]]] = None,
+                 is_custom: bool = False):
         self.id = id_str
         self.title = title
         self.description = description
@@ -66,6 +67,7 @@ class PuzzleScenario:
         self.s_max = 3 * s_optimal
         self.pieces = pieces  # (r, c, owner, p_type)
         self.optimal_path = optimal_path or []
+        self.is_custom = is_custom
 
     def create_initial_state(self) -> GameState:
         state = GameState(board_size=self.board_size, custom_setup=True)
@@ -73,56 +75,139 @@ class PuzzleScenario:
             state.board[r][c] = Piece(owner, pt)
         return state
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'board_size': self.board_size,
+            's_optimal': self.s_optimal,
+            'pieces': self.pieces,
+            'optimal_path': self.optimal_path,
+            'is_custom': self.is_custom
+        }
 
-# Pre-configured benchmark puzzles
-PRECONFIGURED_PUZZLES: Dict[str, PuzzleScenario] = {
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> 'PuzzleScenario':
+        return PuzzleScenario(
+            id_str=data.get('id', 'custom_stage'),
+            title=data.get('title', 'Custom Stage'),
+            description=data.get('description', ''),
+            board_size=data.get('board_size', 6),
+            s_optimal=data.get('s_optimal', 6),
+            pieces=[(p[0], p[1], p[2], p[3]) for p in data.get('pieces', [])],
+            optimal_path=data.get('optimal_path', []),
+            is_custom=data.get('is_custom', True)
+        )
+
+
+# =====================================================================
+# 10 PRESET 6x6 STAGES (ALL MATHEMATICALLY VERIFIED WINNABLE)
+# =====================================================================
+
+PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
+    'stage_6x6_01': PuzzleScenario(
+        id_str='stage_6x6_01',
+        title='Stage 1: Open Plains',
+        description='Straightforward advance past a lone defender to test movement rules.',
+        board_size=6,
+        s_optimal=5,
+        pieces=[(5, 0, 0, 'H'), (2, 4, 1, 'H')],
+        optimal_path=[(5, 0), (4, 1), (3, 2), (2, 3), (1, 4), (0, 5)]
+    ),
+    'stage_6x6_02': PuzzleScenario(
+        id_str='stage_6x6_02',
+        title='Stage 2: First Barrier',
+        description='Navigate through dispersed hostile units stationed across the grid.',
+        board_size=6,
+        s_optimal=5,
+        pieces=[(5, 0, 0, 'H'), (2, 3, 1, 'A'), (4, 5, 1, 'E'), (3, 0, 1, 'H')],
+        optimal_path=[(5, 0), (4, 1), (3, 2), (2, 3), (1, 4), (0, 5)]
+    ),
+    'stage_6x6_03': PuzzleScenario(
+        id_str='stage_6x6_03',
+        title='Stage 3: Scout Crossing',
+        description='Elephant sentry covers the central diagonal. Requires evasive flank step.',
+        board_size=6,
+        s_optimal=6,
+        pieces=[(5, 0, 0, 'H'), (0, 3, 1, 'E')],
+        optimal_path=[(5, 0), (4, 1), (3, 2), (2, 3), (2, 4), (1, 5), (0, 5)]
+    ),
+    'stage_6x6_04': PuzzleScenario(
+        id_str='stage_6x6_04',
+        title='Stage 4: Twin Guards',
+        description='Two Elephants defend the lower perimeter. Advance through middle corridor.',
+        board_size=6,
+        s_optimal=6,
+        pieces=[(5, 0, 0, 'H'), (1, 0, 1, 'E'), (2, 1, 1, 'E')],
+        optimal_path=[(5, 0), (4, 1), (4, 2), (3, 3), (2, 3), (1, 4), (0, 5)]
+    ),
+    'stage_6x6_05': PuzzleScenario(
+        id_str='stage_6x6_05',
+        title='Stage 5: Vanguard Obstacle',
+        description='A heavy Elephant guards column 3. Detour safely around threat radius.',
+        board_size=6,
+        s_optimal=6,
+        pieces=[(5, 0, 0, 'H'), (4, 3, 1, 'E')],
+        optimal_path=[(5, 0), (4, 0), (3, 1), (2, 2), (1, 3), (0, 4), (0, 5)]
+    ),
+    'stage_6x6_06': PuzzleScenario(
+        id_str='stage_6x6_06',
+        title='Stage 6: The Chokepoint',
+        description='Mixed defender positions force precise diagonal stepping without stalling.',
+        board_size=6,
+        s_optimal=6,
+        pieces=[(5, 0, 0, 'H'), (3, 3, 1, 'H'), (0, 4, 1, 'A'), (3, 1, 1, 'H'), (0, 3, 1, 'E')],
+        optimal_path=[(5, 0), (4, 1), (3, 2), (2, 3), (2, 4), (1, 5), (0, 5)]
+    ),
+    'stage_6x6_07': PuzzleScenario(
+        id_str='stage_6x6_07',
+        title='Stage 7: The Ridge',
+        description='Elephant and Ant pairing cuts off direct lines, forcing a 7-step detour.',
+        board_size=6,
+        s_optimal=7,
+        pieces=[(5, 0, 0, 'H'), (3, 3, 1, 'E'), (3, 2, 1, 'A')],
+        optimal_path=[(5, 0), (4, 0), (3, 0), (2, 1), (1, 2), (0, 3), (0, 4), (0, 5)]
+    ),
+    'stage_6x6_08': PuzzleScenario(
+        id_str='stage_6x6_08',
+        title='Stage 8: Flank Patrol',
+        description='Center square guarded by Elephant. Use outer perimeter to reach target.',
+        board_size=6,
+        s_optimal=8,
+        pieces=[(5, 0, 0, 'H'), (2, 3, 1, 'E')],
+        optimal_path=[(5, 0), (4, 0), (3, 0), (2, 0), (1, 1), (0, 2), (0, 3), (0, 4), (0, 5)]
+    ),
+    'stage_6x6_09': PuzzleScenario(
+        id_str='stage_6x6_09',
+        title='Stage 9: Outer Corridor',
+        description='Two Elephants block corner quadrants, requiring a wide 8-move loop.',
+        board_size=6,
+        s_optimal=8,
+        pieces=[(5, 0, 0, 'H'), (3, 2, 1, 'A'), (5, 2, 1, 'E'), (1, 3, 1, 'E')],
+        optimal_path=[(5, 0), (4, 0), (3, 1), (3, 2), (3, 3), (3, 4), (2, 5), (1, 5), (0, 5)]
+    ),
+    'stage_6x6_10': PuzzleScenario(
+        id_str='stage_6x6_10',
+        title='Stage 10: The Labyrinth',
+        description='High-level multi-unit obstacle demanding a full 9-step edge navigation.',
+        board_size=6,
+        s_optimal=9,
+        pieces=[(5, 0, 0, 'H'), (5, 1, 1, 'H'), (0, 2, 1, 'E'), (3, 3, 1, 'E')],
+        optimal_path=[(5, 0), (4, 1), (5, 2), (5, 3), (5, 4), (4, 5), (3, 5), (2, 5), (1, 4), (0, 5)]
+    )
+}
+
+# Classic 9x9 Benchmark Scenarios
+PRECONFIGURED_STAGES_9X9: Dict[str, PuzzleScenario] = {
     'p10_proposal': PuzzleScenario(
         id_str='p10_proposal',
-        title='Proposal Benchmark (10-Step Optimal)',
+        title='Proposal Benchmark (10-Step Optimal - 9x9)',
         description='Standard 10-step optimal puzzle as specified in the proposal. AI acts as Optimal Defender.',
         board_size=9,
         s_optimal=10,
-        pieces=[
-            (8, 0, 0, 'H'),
-            (2, 2, 1, 'A'),
-            (2, 5, 1, 'E'),
-            (4, 3, 1, 'E'),
-            (6, 6, 1, 'H')
-        ],
-        optimal_path=[
-            (8, 0), (7, 1), (6, 2), (5, 3), (4, 4),
-            (4, 5), (4, 6), (3, 7), (2, 7), (1, 7), (0, 8)
-        ]
-    ),
-    'p6_rush': PuzzleScenario(
-        id_str='p6_rush',
-        title='Tactical Sprint (6-Step Optimal - 6x6)',
-        description='Compact 6x6 tactical race. Navigate past Elephant defense.',
-        board_size=6,
-        s_optimal=6,
-        pieces=[
-            (5, 0, 0, 'H'),
-            (3, 4, 1, 'A'),
-            (5, 5, 1, 'E'),
-            (5, 2, 1, 'E')
-        ],
-        optimal_path=[(5, 0), (4, 0), (3, 1), (2, 2), (1, 3), (0, 4), (0, 5)]
-    ),
-    'p8_flank': PuzzleScenario(
-        id_str='p8_flank',
-        title='Flank Corridor (8-Step Optimal - 6x6)',
-        description='Maneuver along the outer perimeter to bypass heavy defender presence.',
-        board_size=6,
-        s_optimal=8,
-        pieces=[
-            (5, 0, 0, 'H'),
-            (0, 3, 1, 'A'),
-            (1, 0, 1, 'A'),
-            (3, 5, 1, 'E'),
-            (3, 2, 1, 'E'),
-            (5, 3, 1, 'E')
-        ],
-        optimal_path=[(5, 0), (4, 0), (3, 0), (2, 0), (1, 1), (0, 2), (0, 3), (0, 4), (0, 5)]
+        pieces=[(8, 0, 0, 'H'), (2, 2, 1, 'A'), (2, 5, 1, 'E'), (4, 3, 1, 'E'), (6, 6, 1, 'H')],
+        optimal_path=[(8, 0), (7, 1), (6, 2), (5, 3), (4, 4), (4, 5), (4, 6), (3, 7), (2, 7), (1, 7), (0, 8)]
     ),
     'p12_labyrinth': PuzzleScenario(
         id_str='p12_labyrinth',
@@ -130,60 +215,73 @@ PRECONFIGURED_PUZZLES: Dict[str, PuzzleScenario] = {
         description='Extended defense perimeter requiring complex evasive pathing.',
         board_size=9,
         s_optimal=12,
-        pieces=[
-            (8, 0, 0, 'H'),
-            (8, 2, 1, 'E'),
-            (8, 3, 1, 'A'),
-            (3, 5, 1, 'E'),
-            (5, 2, 1, 'E')
-        ],
-        optimal_path=[
-            (8, 0), (7, 0), (6, 0), (5, 0), (4, 0),
-            (3, 1), (2, 2), (1, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 8)
-        ]
+        pieces=[(8, 0, 0, 'H'), (8, 2, 1, 'E'), (8, 3, 1, 'A'), (3, 5, 1, 'E'), (5, 2, 1, 'E')],
+        optimal_path=[(8, 0), (7, 0), (6, 0), (5, 0), (4, 0), (3, 1), (2, 2), (1, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 8)]
     )
 }
 
+# Unified dictionary for backward compatibility
+PRECONFIGURED_PUZZLES: Dict[str, PuzzleScenario] = {
+    **PRECONFIGURED_STAGES_6X6,
+    **PRECONFIGURED_STAGES_9X9
+}
 
-def generate_procedural_puzzle(target_steps: int = 10, board_size: int = 9) -> PuzzleScenario:
-    """
-    Dynamically generates a randomized N-step puzzle scenario, mathematically
-    verified by BFS search to possess an optimal safe solution of `target_steps`.
-    """
-    target_start = (board_size - 1, 0)
-    target_end = (0, board_size - 1)
 
-    for attempt in range(1000):
-        num_defs = random.randint(2, 6)
+def get_all_puzzles() -> Dict[str, PuzzleScenario]:
+    """Returns all preset stages and custom saved stages from storage."""
+    all_puzzles = dict(PRECONFIGURED_PUZZLES)
+    custom_list = storage.get_custom_stages()
+    for item in custom_list:
+        try:
+            scen = PuzzleScenario.from_dict(item)
+            all_puzzles[scen.id] = scen
+        except Exception as e:
+            print(f"Error loading custom stage: {e}")
+    return all_puzzles
+
+
+def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps: int = 10, max_attempts: int = 500) -> PuzzleScenario:
+    """
+    Algorithmically generates a guaranteed winnable puzzle scenario on N x N board.
+    Runs BFS safe path solver to ensure a valid optimal path exists without unavoidable traps.
+    """
+    start_coord = (board_size - 1, 0)
+    target_coord = (0, board_size - 1)
+
+    for attempt in range(max_attempts):
+        num_defs = random.randint(1, 4 if board_size == 6 else 6)
         defs = []
-        occupied_coords = {target_start, target_end}
+        occupied_set = {start_coord, target_coord}
 
         for _ in range(num_defs):
             r = random.randint(0, board_size - 1)
             c = random.randint(0, board_size - 1)
-            if (r, c) not in occupied_coords:
-                occupied_coords.add((r, c))
-                pt = random.choice(['E', 'A', 'H'])
-                defs.append((r, c, pt))
+            if (r, c) not in occupied_set:
+                occupied_set.add((r, c))
+                defs.append((r, c, 1, random.choice(['E', 'A', 'H'])))
 
-        pieces = [(target_start[0], target_start[1], 0, 'H')]
-        for r, c, pt in defs:
-            pieces.append((r, c, 1, pt))
+        pieces = [(start_coord[0], start_coord[1], 0, 'H')] + defs
+        d, path = bfs_safe_path(board_size, pieces, start_coord, target_coord, 'H')
 
-        d, path = bfs_safe_path(board_size, pieces, target_start, target_end, 'H')
-        if d == target_steps:
+        if d is not None and min_steps <= d <= max_steps:
             return PuzzleScenario(
-                id_str=f"procedural_{target_steps}_{int(time.time())}",
-                title=f"Procedural {target_steps}-Step Challenge",
-                description=f"Algorithmically generated {board_size}x{board_size} puzzle with verified {target_steps}-step optimal route.",
+                id_str=f"random_{board_size}x{board_size}_{int(time.time()*1000)%100000}",
+                title=f"Random Winnable Challenge ({d} Steps)",
+                description=f"Generated {board_size}x{board_size} scenario with mathematically verified {d}-step solution.",
                 board_size=board_size,
-                s_optimal=target_steps,
+                s_optimal=d,
                 pieces=pieces,
-                optimal_path=path
+                optimal_path=path,
+                is_custom=False
             )
 
-    # Fallback to pre-configured 10-step proposal benchmark if timeout
-    return PRECONFIGURED_PUZZLES['p10_proposal']
+    # Fallback to verified preset stage 5
+    return PRECONFIGURED_STAGES_6X6['stage_6x6_05']
+
+
+def generate_procedural_puzzle(target_steps: int = 10, board_size: int = 9) -> PuzzleScenario:
+    """Alias for backwards compatibility with previous caller."""
+    return generate_winnable_puzzle(board_size=board_size, min_steps=target_steps, max_steps=target_steps)
 
 
 class PuzzleSession:
@@ -191,9 +289,11 @@ class PuzzleSession:
     Session Telemetry Manager:
     Tracks current attempt steps, cumulative steps across resets, undo counts,
     delay margin, neutralization rate, and per-turn AI telemetry.
+    Supports `show_metrics` toggle to avoid in-game spoilers.
     """
-    def __init__(self, scenario: PuzzleScenario):
+    def __init__(self, scenario: PuzzleScenario, show_metrics: bool = False):
         self.scenario = scenario
+        self.show_metrics: bool = show_metrics
         self.current_attempt_steps: int = 0
         self.cumulative_steps: int = 0
         self.resets_count: int = 0
@@ -215,17 +315,17 @@ class PuzzleSession:
     def delay_margin(self) -> int:
         return max(0, self.current_attempt_steps - self.s_optimal)
 
-    def record_player_step(self):
+    def record_player_step(self) -> None:
         self.current_attempt_steps += 1
 
-    def record_undo(self):
+    def record_undo(self) -> None:
         self.undo_count += 1
         if self.current_attempt_steps > 0:
             self.current_attempt_steps -= 1
 
     def record_ai_telemetry(self, source_coord: Tuple[int, int], target_coord: Tuple[int, int],
                             eval_score: float, t_turn: float, nodes_gen: int,
-                            nodes_eval: int, prune_efficiency: float):
+                            nodes_eval: int, prune_efficiency: float) -> None:
         self.ai_telemetry_history.append({
             'action': (source_coord, target_coord),
             'eval_score': eval_score,
@@ -235,7 +335,7 @@ class PuzzleSession:
             'prune_efficiency': prune_efficiency
         })
 
-    def reset_attempt(self):
+    def reset_attempt(self) -> None:
         self.resets_count += 1
         self.cumulative_steps += self.current_attempt_steps
         self.current_attempt_steps = 0
@@ -244,13 +344,6 @@ class PuzzleSession:
         self.neutralization_reason = ""
 
     def evaluate_status(self, state: GameState) -> str:
-        """
-        Determines current puzzle status:
-        - SOLVED: Player reached target corner
-        - NEUTRALIZED: Step limit exceeded or player eliminated / blocked
-        - DELAYED: Player exceeded optimal path but remains within S_max
-        - ON_TRACK: Player on schedule
-        """
         target = state.target_corners[0]
 
         # Victory check
@@ -302,13 +395,10 @@ class ShortestPathScriptedPlayer:
             return None
 
         target = state.target_corners[0]
-
-        # Prioritize immediate winning move
         for m in valid_moves:
             if m[1] == target:
                 return m
 
-        # Select move that minimizes Chebyshev distance to goal
         def dist_metric(m):
             end = m[1]
             return max(abs(end[0] - target[0]), abs(end[1] - target[1]))
@@ -349,19 +439,13 @@ def run_simulation_benchmark(agent_model: str = 'proposed_d6',
                              scripted_player_type: str = 'shortest_path',
                              num_games: int = 10,
                              depth: int = 6,
-                             board_size: int = 9,
+                             board_size: int = 6,
                              progress_callback: Optional[Any] = None) -> Dict[str, Any]:
     """
     Executes simulated matches for the Chapter 2.2 / Table 3 evaluation framework.
-    Simulates games between Defender AI and Scripted Players, collecting:
-    - Turn Execution Latency (Tturn)
-    - Pruning Efficiency (prune %)
-    - Delay Margin (Delta S)
-    - Neutralization Rate (Rneut %)
     """
     from ai_engine import get_defender_move
 
-    # Instantiate scripted player
     if scripted_player_type == 'random':
         player = RandomScriptedPlayer()
     elif scripted_player_type == 'sub_optimal':
@@ -375,18 +459,17 @@ def run_simulation_benchmark(agent_model: str = 'proposed_d6',
     latencies = []
     pruning_efficiencies = []
 
-    scenario = PRECONFIGURED_PUZZLES.get('p10_proposal') if board_size == 9 else PRECONFIGURED_PUZZLES.get('p6_rush')
-    s_optimal = scenario.s_optimal if scenario else 10
+    scenario = PRECONFIGURED_STAGES_6X6.get('stage_6x6_05') if board_size == 6 else PRECONFIGURED_STAGES_9X9.get('p10_proposal')
+    s_optimal = scenario.s_optimal if scenario else 6
     s_max = 3 * s_optimal
 
     for game_idx in range(num_games):
-        # Reset state from scenario
-        state = scenario.create_initial_state() if scenario else PRECONFIGURED_PUZZLES['p10_proposal'].create_initial_state()
+        state = scenario.create_initial_state() if scenario else PRECONFIGURED_STAGES_6X6['stage_6x6_01'].create_initial_state()
         steps_player = 0
         game_resolved = False
 
         while not game_resolved and steps_player < s_max:
-            # 1. Player turn
+            # Player turn
             p_move = player.select_move(state)
             if not p_move:
                 neutralized_count += 1
@@ -396,21 +479,19 @@ def run_simulation_benchmark(agent_model: str = 'proposed_d6',
             state.make_move(p_move[0], p_move[1])
             steps_player += 1
 
-            # Check if player won
             if state.winner == 0:
                 delay = max(0, steps_player - s_optimal)
                 solved_delays.append(delay)
                 game_resolved = True
                 break
 
-            # 2. Defender AI turn
+            # Defender AI turn
             def_move, eval_s, tel = get_defender_move(state, agent_model=agent_model, depth=depth)
             latencies.append(tel.t_turn)
             if tel.nodes_generated > 0:
                 pruning_efficiencies.append(tel.pruning_efficiency)
 
             if not def_move:
-                # Defender has no moves, player wins
                 delay = max(0, steps_player - s_optimal)
                 solved_delays.append(delay)
                 game_resolved = True
@@ -419,13 +500,11 @@ def run_simulation_benchmark(agent_model: str = 'proposed_d6',
             state.make_move(def_move[0], def_move[1])
 
             if state.winner == 1:
-                # Defender won
                 neutralized_count += 1
                 game_resolved = True
                 break
 
         if not game_resolved and steps_player >= s_max:
-            # Step limit exceeded
             neutralized_count += 1
 
         if progress_callback:
