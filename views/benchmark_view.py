@@ -178,7 +178,7 @@ class BenchmarkView(tk.Frame):
         self.tree.heading("games", text="Games (G)")
         self.tree.heading("latency", text="Turn Latency (Tturn)")
         self.tree.heading("pruning", text="Pruning Efficiency (prune)")
-        self.tree.heading("delay", text="Delay Margin (ΔS)")
+        self.tree.heading("delay", text="Delay Margin (moves)")
         self.tree.heading("r_neut", text="Neutralization Rate (Rneut)")
 
         self.tree.column("model", width=220, anchor="w")
@@ -189,7 +189,7 @@ class BenchmarkView(tk.Frame):
         self.tree.column("delay", width=110, anchor="center")
         self.tree.column("r_neut", width=140, anchor="center")
 
-        tree_scroll = tk.Scrollbar(table_card, orient=tk.VERTICAL, command=self.tree.yview)
+        tree_scroll = ttk.Scrollbar(table_card, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=tree_scroll.set)
         tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.tree.pack(fill=tk.BOTH, expand=True)

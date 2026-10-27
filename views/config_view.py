@@ -115,7 +115,7 @@ class ConfigView(tk.Frame):
 
             # Board Size
             row += 1
-            tk.Label(card, text="Board Dimension (N×N):", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
+            tk.Label(card, text="Board Dimension (NxN):", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
             self.var_board_size = tk.StringVar(value="9x9 Board")
             self.cb_board_size = ttk.Combobox(card, textvariable=self.var_board_size, values=["9x9 Board", "6x6 Board"], state="readonly", width=16, font=entry_font)
             self.cb_board_size.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)

@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 from ui_theme import THEME, FONT_NAME, ButtonSecondary
 
 
@@ -38,7 +39,7 @@ class TutorialView(tk.Frame):
         scroll_card.pack(fill=tk.BOTH, expand=True)
 
         canvas = tk.Canvas(scroll_card, bg=THEME['surface'], highlightthickness=0)
-        scrollbar = tk.Scrollbar(scroll_card, orient=tk.VERTICAL, command=canvas.yview)
+        scrollbar = ttk.Scrollbar(scroll_card, orient=tk.VERTICAL, command=canvas.yview)
         content_frame = tk.Frame(canvas, bg=THEME['surface'], padx=24, pady=18)
 
         content_frame.bind(
@@ -70,7 +71,7 @@ class TutorialView(tk.Frame):
             "   Valid capture moves highlight the target square completely red.\n\n"
             "4. Puzzle Mode: Optimal Defender (Proposal Specification):\n"
             "   The game begins in a pre-configured puzzle state with an optimal solution of N moves (e.g. 10 moves).\n"
-            "   The AI acts as an Optimal Defender: if you play optimally, it maximizes delay (delay margin ΔS);\n"
+            "   The AI acts as an Optimal Defender: if you play optimally, it maximizes delay (delay margin);\n"
             "   if you play sub-optimally, it exploits the mistake to neutralize the advance within S_max = 3 * S_optimal.\n"
             "   The AI utilizes Minimax with Alpha-Beta Pruning, suit-adapted MVV-LVA move ordering, and a\n"
             "   Dynamic Non-Transitive Evaluation Function E(s) = wm*M(s) + wc*C(s) + wp*P(s) + wt*T(s) evaluated under 2.0s.\n\n"
