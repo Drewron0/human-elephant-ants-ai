@@ -1,7 +1,7 @@
 # Random Challenge background generation
 
 Date: 2026-10-27  
-Status: Proposed; implementation awaits approval.
+Status: Approved and implemented.
 
 ## 1. Problem
 
@@ -104,4 +104,16 @@ generation and loading message. No user data migration is involved.
 
 None. Proposed defaults are one batch per application session, navigation
 available during generation, and retry by selecting Random Challenge again
-after a failure. No implementation is included in this PRD.
+after a failure.
+
+Implementation checkpoint (2026-10-27):
+
+- Added one daemon worker, queue polling, application-session caching, and a
+  loading guard for Play Stage. No new dependencies or generator changes.
+- Passed 10 Random Challenge tests and 3 stage-editor regression tests.
+- In a live check with the real generator, switched to Custom Stages, left for
+  the main menu, reopened the selector, and displayed the completed three-card
+  batch. Navigation remained responsive.
+- The user stopped Computer Use before the close-during-generation check.
+  That manual shutdown check remains unverified; cleanup is covered by tests.
+- Remaining limit: generation continues consuming CPU in the background.

@@ -1,4 +1,5 @@
 import tkinter as tk
+from queue import Queue
 from typing import Dict, Any, Optional
 from ui_theme import THEME, setup_ttk_styles
 from views.menu_view import MainMenuView
@@ -38,6 +39,10 @@ class GameApp(tk.Tk):
         self.container.pack(fill=tk.BOTH, expand=True)
 
         self.current_view: Optional[tk.Frame] = None
+        self.random_challenge_queue = Queue()
+        self.random_challenge_loading = False
+        self.random_challenges = None
+        self.random_challenge_error = None
         self.show_view('menu')
 
     def show_view(self, view_name: str, **kwargs):

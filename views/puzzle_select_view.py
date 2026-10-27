@@ -1,4 +1,6 @@
 import tkinter as tk
+import threading
+from queue import Empty
 from tkinter import ttk
 from typing import Dict, Any, List, Optional
 
@@ -13,6 +15,18 @@ from puzzle_logic import (
 )
 
 
+def _generate_random_challenges(results):
+    try:
+        puzzles = [
+            generate_winnable_puzzle(board_size=6, min_steps=5, max_steps=7),
+            generate_winnable_puzzle(board_size=6, min_steps=6, max_steps=8),
+            generate_winnable_puzzle(board_size=6, min_steps=7, max_steps=10)
+        ]
+        results.put((puzzles, None))
+    except Exception as exc:
+        results.put((None, str(exc) or type(exc).__name__))
+
+
 class PuzzleSelectView(tk.Frame):
     """
     Apple-styled Stage Selection View with dynamic board thumbnails,
@@ -25,10 +39,14 @@ class PuzzleSelectView(tk.Frame):
         self.active_category = "preset_6x6"
         self.selected_puzzle_id: str = "stage_6x6_01"
         self.card_widgets: Dict[str, Dict[str, Any]] = {}
+        self._random_poll_id = None
+        self._closed = False
 
         self._build_ui()
         self._populate_grid()
         self._update_sidebar()
+        if self.app.random_challenge_loading:
+            self._poll_random_challenges()
 
     def _build_ui(self):
         # Top Header Bar
@@ -198,7 +216,8 @@ class PuzzleSelectView(tk.Frame):
         ).pack(anchor="w", padx=(18, 0))
 
         # Action Buttons
-        ButtonPrimary(content, text="Play Stage", command=self._start_selected_stage).pack(fill=tk.X, pady=(0, 6))
+        self.btn_play = ButtonPrimary(content, text="Play Stage", command=self._start_selected_stage)
+        self.btn_play.pack(fill=tk.X, pady=(0, 6))
 
         self.frame_custom_actions = tk.Frame(content, bg=THEME['surface'])
         self.frame_custom_actions.pack(fill=tk.X, pady=(0, 8))
@@ -225,7 +244,37 @@ class PuzzleSelectView(tk.Frame):
     def _set_category(self, cat: str):
         self.active_category = cat
         self._highlight_active_tab()
+        start_job = (cat == 'random' and self.app.random_challenges is None
+                     and not self.app.random_challenge_loading)
+        if start_job:
+            self.app.random_challenge_loading = True
+            self.app.random_challenge_error = None
         self._populate_grid()
+        if start_job:
+            try:
+                threading.Thread(target=_generate_random_challenges,
+                                 args=(self.app.random_challenge_queue,), daemon=True).start()
+            except Exception as exc:
+                self.app.random_challenge_queue.put((None, str(exc) or type(exc).__name__))
+        if self.app.random_challenge_loading and self._random_poll_id is None:
+            self._poll_random_challenges()
+
+    def _poll_random_challenges(self):
+        if self._closed:
+            return
+        self._random_poll_id = None
+        try:
+            puzzles, error = self.app.random_challenge_queue.get_nowait()
+        except Empty:
+            if self.app.random_challenge_loading:
+                self._random_poll_id = self.after(100, self._poll_random_challenges)
+            return
+
+        self.app.random_challenges = puzzles
+        self.app.random_challenge_error = error
+        self.app.random_challenge_loading = False
+        if self.active_category == 'random':
+            self._populate_grid()
 
     def _highlight_active_tab(self):
         tabs = [
@@ -253,23 +302,19 @@ class PuzzleSelectView(tk.Frame):
         elif self.active_category == "custom":
             puzzles = [p for p in get_all_puzzles().values() if p.is_custom]
         else:
-            loading_label = tk.Label(
-                self.scrollable_grid, text="Creating Random Challenge.....",
-                font=(FONT_NAME, 11), bg=THEME['bg'], fg=THEME['text_muted']
-            )
-            loading_label.grid(row=0, column=0, columnspan=3, pady=40)
-            self.grid_canvas.yview_moveto(0)
-            # Paint the selected tab and message before the synchronous search starts.
-            self.update_idletasks()
-            # Random winnable: provide 3 dynamically generated winnable puzzles
-            try:
-                puzzles = [
-                    generate_winnable_puzzle(board_size=6, min_steps=5, max_steps=7),
-                    generate_winnable_puzzle(board_size=6, min_steps=6, max_steps=8),
-                    generate_winnable_puzzle(board_size=6, min_steps=7, max_steps=10)
-                ]
-            finally:
-                loading_label.destroy()
+            puzzles = self.app.random_challenges
+            if puzzles is None:
+                self.selected_puzzle_id = ''
+                message = 'Creating Random Challenge.....'
+                if self.app.random_challenge_error:
+                    message = (f'Could not create random challenges: {self.app.random_challenge_error}\n'
+                               'Select Random Challenge again to retry.')
+                tk.Label(self.scrollable_grid, text=message, font=(FONT_NAME, 11),
+                         bg=THEME['bg'], fg=THEME['text_muted'], wraplength=420).grid(
+                             row=0, column=0, columnspan=3, pady=40)
+                self.grid_canvas.yview_moveto(0)
+                self._update_sidebar()
+                return
 
         if not puzzles:
             msg_frame = tk.Frame(self.scrollable_grid, bg=THEME['bg'])
@@ -346,6 +391,17 @@ class PuzzleSelectView(tk.Frame):
                 card.config(highlightbackground=THEME['border'], highlightthickness=1)
 
     def _update_sidebar(self):
+        if self.active_category == 'random' and not self.card_widgets:
+            self.btn_play.config(state=tk.DISABLED)
+            self.lbl_selected_title.config(text='Random Challenge')
+            self.lbl_selected_desc.config(text='Select a challenge once generation finishes.')
+            self.lbl_selected_stats.config(text='')
+            self.frame_custom_actions.pack_forget()
+            for widget in self.box_leaderboard.winfo_children():
+                widget.destroy()
+            return
+
+        self.btn_play.config(state=tk.NORMAL)
         puzzle = None
         if self.selected_puzzle_id in self.card_widgets:
             puzzle = self.card_widgets[self.selected_puzzle_id]['puzzle']
@@ -434,6 +490,8 @@ class PuzzleSelectView(tk.Frame):
         ButtonDanger(modal.footer, text="Delete Stage", command=confirm).pack(side=tk.RIGHT)
 
     def _start_selected_stage(self):
+        if self.active_category == 'random' and not self.card_widgets:
+            return
         puzzle = self.card_widgets.get(self.selected_puzzle_id, {}).get('puzzle')
         if not puzzle:
             all_p = get_all_puzzles()
@@ -474,3 +532,13 @@ class PuzzleSelectView(tk.Frame):
         }
 
         self.app.start_puzzle(config)
+
+    def _cleanup(self):
+        self._closed = True
+        if self._random_poll_id is not None:
+            self.after_cancel(self._random_poll_id)
+            self._random_poll_id = None
+
+    def destroy(self):
+        self._cleanup()
+        super().destroy()
