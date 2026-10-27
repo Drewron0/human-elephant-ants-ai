@@ -145,6 +145,8 @@ def draw_board_thumbnail(canvas: tk.Canvas, board_size: int, pieces: List[Tuple[
     canvas.create_rectangle(offset_x - 1, offset_y - 1, offset_x + total_grid_w + 1, offset_y + total_grid_h + 1,
                             fill=THEME['surface_card'], outline=THEME['border'], width=1)
 
+    player_home = (board_size - 1, 0)
+
     # Draw cells
     for r in range(board_size):
         for c in range(board_size):
@@ -156,11 +158,15 @@ def draw_board_thumbnail(canvas: tk.Canvas, board_size: int, pieces: List[Tuple[
             fill = THEME['board_light'] if (r + c) % 2 == 0 else THEME['board_dark']
             if (r, c) == target_coord:
                 fill = THEME['corner_p1']
+            elif (r, c) == player_home:
+                fill = THEME['corner_p2']
 
             canvas.create_rectangle(x0, y0, x1, y1, fill=fill, outline=THEME['board_grid'], width=1)
 
             if (r, c) == target_coord:
                 draw_star(canvas, (x0 + x1) / 2, (y0 + y1) / 2, max(4, cell_size * 0.32), fill='#F57F17', outline='')
+            elif (r, c) == player_home:
+                draw_star(canvas, (x0 + x1) / 2, (y0 + y1) / 2, max(4, cell_size * 0.32), fill='#C62828', outline='')
 
     # Draw pieces
     for r, c, owner, pt in pieces:
@@ -179,13 +185,40 @@ def draw_board_thumbnail(canvas: tk.Canvas, board_size: int, pieces: List[Tuple[
                 canvas.create_text(cx, cy, text=pt, font=(FONT_NAME, max(7, cell_size // 3), "bold"), fill='#FFFFFF')
 
 
+def bind_mousewheel(widget: tk.Widget, scroll_target: tk.Widget) -> None:
+    """
+    Recursively binds mouse wheel and touchpad events so scrolling anywhere over
+    the widget or its descendants smoothly scrolls the target canvas/listbox.
+    """
+    def _on_mousewheel(event):
+        if event.delta:
+            scroll_units = int(-1 * (event.delta / 120))
+            if scroll_units == 0:
+                scroll_units = -1 if event.delta > 0 else 1
+            scroll_target.yview_scroll(scroll_units, "units")
+        elif event.num == 4:
+            scroll_target.yview_scroll(-1, "units")
+        elif event.num == 5:
+            scroll_target.yview_scroll(1, "units")
+        return "break"
+
+    def _bind_recursive(w):
+        w.bind("<MouseWheel>", _on_mousewheel, add="+")
+        w.bind("<Button-4>", _on_mousewheel, add="+")
+        w.bind("<Button-5>", _on_mousewheel, add="+")
+        for child in w.winfo_children():
+            _bind_recursive(child)
+
+    _bind_recursive(widget)
+
+
 class ButtonPrimary(tk.Button):
     def __init__(self, parent, text: str, command: Optional[Callable] = None, width: Optional[int] = None, **kwargs):
         super().__init__(
             parent,
             text=text,
             command=command,
-            font=(FONT_NAME, 9, 'bold'),
+            font=(FONT_NAME, 9),
             bg=THEME['accent'],
             fg='#FFFFFF',
             activebackground=THEME['accent_hover'],
