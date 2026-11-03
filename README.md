@@ -4,7 +4,7 @@ An adversarial tactical board game and AI research framework developed for the A
 
 ---
 
-## 1. Game Rules & Mechanics
+## 1. Game Rules and Mechanics
 
 Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian folk-game cyclic dominance (*Gajah, Orang, Semut*):
 
@@ -12,7 +12,7 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 - **Human (H)** defeats **Ant (A)**
 - **Ant (A)** defeats **Elephant (E)**
 
-### Movement & Objectives
+### Movement and Objectives
 - Pieces move orthogonally (up, down, left, right) one step per turn into an adjacent empty square or to capture an enemy piece according to cyclic dominance.
 - Pieces cannot capture enemies of the same type or their predator.
 - **Victory Condition:** A player wins by navigating any piece to the opponent's starting corner (Player 1 targets top-right, Player 2 targets bottom-left).
@@ -21,55 +21,55 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 
 ## 2. Core Features
 
-### Apple-Inspired Design System
+### Modern Clean Dark Design System
 - Built with restrained typography, high-contrast dark system palette (`#121214`, `#1C1C1E`, `#2C2C2E`), and subtle elevation.
-- Fluid, interactive splitters (`tk.PanedWindow`) allowing users to resize the sidebars while the board dynamically scales to fit the container.
+- Fluid, interactive splitters (`tk.PanedWindow`) allowing users to resize sidebars while the board dynamically scales to fit the container.
 
-### Puzzle Mode & Optimal Defender AI
-- **10 Preset 6x6 Stages:** Curated tactical scenarios with varying optimal solution lengths ($S_{optimal}$ from 5 to 9 steps) and maximum move limits ($S_{max} = 3 \times S_{optimal}$).
-- **Procedural Winnable Puzzle Generator:** Generates custom random boards verified through a Breadth-First Search (BFS) safe-path solver to guarantee $100\%$ mathematical solvability.
-- **Custom Stage Editor (Full CRUD):** Create, inspect, test winnability, save, and delete custom stages directly inside the visual canvas editor.
-- **Stage Selection & Thumbnails:** Interactive catalog featuring live board thumbnail previews, AI difficulty mode selectors, player selection, and per-stage leaderboard tracking.
+### Tactical Stage Studio & Custom Stage Builder
+- **Preset Tactical Stages:** Curated tactical scenarios with varying optimal solution lengths (optimal steps from 5 to 9) and maximum move limits (S_max = 3 * optimal).
+- **Custom Stage Editor:** Full visual board editor and CRUD manager supporting 6x6 to 9x9 board sizes, piece palette, right-click removal, hotkeys 1-6 & 7/0, and instant winnability solver.
+- **Procedural Winnability Generator:** Automated generation of proven winnable challenge stages in background threads.
+- **Stage Selection and Thumbnails:** Interactive catalog featuring live board thumbnail previews, AI difficulty mode selectors, player selection, and per-stage leaderboard tracking.
 - **Spoiler Prevention Toggle:** Toggle search metrics display before playing to prevent move spoilers.
 
 ### Adversarial Search Architecture
 - **Algorithm:** Minimax Search with Alpha-Beta Pruning, Leaf Node Evaluation, and Dynamic Move Ordering.
 - **Non-Transitive Evaluation Function:** Dynamic piece weights computed from opponent's remaining suit distribution combined with corner distance Chebyshev/Manhattan heuristics.
-- **Turn Time Guarantee:** Strict time check ensuring all AI moves return in under $2.0$ seconds ($T_{turn} \le 2.0$s).
+- **Turn Time Guarantee:** Strict time check ensuring all AI moves return in under 2.0 seconds (T_turn <= 2.0s).
 
 ---
 
 ## 3. Project Structure
 
-```
-├── ai_engine.py             # Minimax search, Alpha-Beta pruning, evaluation function
-├── game_logic.py            # Board representation, state transitions, cyclic captures
-├── gui.py                   # Master Tkinter application controller
-├── main.py                  # Application entry point
-├── network.py               # Local socket multiplayer server/client
-├── puzzle_logic.py          # 10 6x6 stages, BFS safe path solver, random generator
-├── run_benchmark.py         # Automated CLI benchmark runner for research metrics
-├── storage.py               # JSON persistence for profiles, leaderboards, and custom stages
-├── ui_theme.py              # Apple-inspired UI theme definitions, colors, and components
-├── verify_stages.py         # Automated verification suite for stage winnability
-├── tests/
-│   └── test_game.py         # Unit test suite covering mechanics, AI, and CRUD
-└── views/
-    ├── benchmark_view.py    # GUI benchmarking and simulation lab
-    ├── config_view.py       # Game setup and player preferences
-    ├── game_view.py         # Standard match view with resizable paned layout
-    ├── leaderboard_view.py  # Global and per-stage records
-    ├── menu_view.py         # Main navigation hub
-    ├── puzzle_game_view.py  # Puzzle gameplay view with real-time defender AI
-    ├── puzzle_select_view.py# Stage selector with thumbnails, AI picker, & leaderboards
-    ├── saves_view.py        # Match save/load manager
-    ├── stage_editor_view.py # Interactive stage designer with instant BFS solver
-    └── tutorial_view.py     # How-to-play interactive manual
+```text
+AFL2/
+|-- ai_engine.py             # Minimax search, Alpha-Beta pruning, evaluation function
+|-- game_logic.py            # Board representation, state transitions, cyclic captures
+|-- gui.py                   # Master Tkinter application controller
+|-- main.py                  # Application entry point
+|-- network.py               # Local socket multiplayer server/client
+|-- puzzle_logic.py          # 10 6x6 stages, BFS safe path solver, random generator
+|-- run_benchmark.py         # Automated CLI benchmark runner for research metrics
+|-- storage.py               # JSON persistence for profiles, leaderboards, and custom stages
+|-- ui_theme.py              # Dark theme definitions, colors, and components
+|-- verify_stages.py         # Automated verification suite for stage winnability
+|-- tests/
+|   |-- test_game.py         # Unit test suite covering mechanics, AI, and CRUD
+`-- views/
+    |-- benchmark_view.py    # GUI benchmarking and simulation lab
+    |-- config_view.py       # Game setup and player preferences
+    |-- game_view.py         # Standard match view with resizable paned layout
+    |-- leaderboard_view.py  # Global and per-stage records
+    |-- menu_view.py         # Main navigation hub
+    |-- puzzle_game_view.py  # Puzzle gameplay view with real-time defender AI
+    |-- puzzle_select_view.py# Stage selector with thumbnails, AI picker, and leaderboards
+    |-- stage_editor_view.py # Interactive stage designer with instant BFS solver
+    `-- tutorial_view.py     # How-to-play interactive manual
 ```
 
 ---
 
-## 4. Setup & Installation
+## 4. Setup and Installation
 
 ### Requirements
 - Python 3.8+ (Python 3.10+ recommended)
@@ -119,13 +119,3 @@ python run_benchmark.py
 ```bash
 python -m unittest discover tests
 ```
-
----
-
-## 6. Academic Team
-
-- **Felix Richardo** (`frichardo@student.ciputra.ac.id`)
-- **Vallerian Davyne Djunarko** (`vdjunarko@student.ciputra.ac.id`)
-- **Aaron Hans Adiputra** (`aadiputra@student.ciputra.ac.id`)
-
-*Universitas Ciputra Surabaya — 2026*
