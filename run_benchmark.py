@@ -1,6 +1,6 @@
 """
 Chess-Sut: Minimax with Alpha-Beta Pruning Evaluation Framework
-Standalone Benchmark Runner (Russell & Norvig, Table 3 Comparative Analysis)
+Standalone Benchmark Runner
 
 Team: Felix Richardo, Vallerian Davyne Djunarko, Aaron Hans Adiputra
 Universitas Ciputra Surabaya 2026
@@ -14,15 +14,15 @@ from puzzle_logic import run_simulation_benchmark
 def main():
     print("=" * 80)
     print("CHESS-SUT AI AGENT EVALUATION BENCHMARK")
-    print("Comparing Proposed Optimized Agent against Baselines (Proposal Table 3)")
+    print("Comparing Optimized Agent against Baselines")
     print("=" * 80)
 
     configurations = [
-        # Model, Depth, Display Label, Opponents
-        ('proposed_d6', 6, "Proposed: Optimized (Alpha-Beta d=6)"),
-        ('proposed_d3', 3, "Proposed: Optimized (Alpha-Beta d=3)"),
-        ('baseline_2_vanilla', 3, "Baseline 2: Vanilla Minimax (d=3, static)"),
-        ('baseline_1_random', 1, "Baseline 1: Random Move Agent")
+        # Agent configurations
+        ('proposed_d6', 6, "Optimized (Alpha-Beta d=6)"),
+        ('proposed_d3', 3, "Optimized (Alpha-Beta d=3)"),
+        ('baseline_2_vanilla', 3, "Vanilla Minimax (d=3, static)"),
+        ('baseline_1_random', 1, "Random Move Agent")
     ]
 
     opponents = [
@@ -32,7 +32,7 @@ def main():
     ]
 
     games_per_run = 10
-    board_size = 6  # Fast benchmark on 6x6 or 9x9
+    board_size = 6
 
     print(f"\nConfiguration: {games_per_run} games per combination on {board_size}x{board_size} puzzle board.\n")
 

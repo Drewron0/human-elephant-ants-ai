@@ -12,7 +12,7 @@ from puzzle_logic import run_simulation_benchmark
 class BenchmarkView(tk.Frame):
     """
     Simulation & Benchmark Lab View.
-    Implements the comparative evaluation framework described in Chapter 2.2 and Table 3.
+    Implements the comparative evaluation framework.
     """
     def __init__(self, parent, app):
         super().__init__(parent, bg=THEME['bg'])
@@ -40,7 +40,7 @@ class BenchmarkView(tk.Frame):
 
         tk.Label(
             header,
-            text="Simulated Match Benchmark Framework (Russell & Norvig, Table 3 Comparative Analysis)",
+            text="Simulated Match Benchmark Framework",
             font=(FONT_NAME, 10),
             bg=THEME['bg'],
             fg=THEME['text_muted']
@@ -62,20 +62,20 @@ class BenchmarkView(tk.Frame):
         lbl_fnt = (FONT_NAME, 9, "bold")
         ent_fnt = (FONT_NAME, 9)
 
-        # Row 1: Agent & Scripted Player
+        # Primary Controls: Agent and Scripted Player
         row1 = tk.Frame(ctrl_card, bg=THEME['surface'])
         row1.pack(fill=tk.X, pady=4)
 
         tk.Label(row1, text="Defender Model:", font=lbl_fnt, bg=THEME['surface'], fg=THEME['text']).pack(side=tk.LEFT, padx=(0, 6))
-        self.var_agent = tk.StringVar(value="Proposed: Optimized Agent (Alpha-Beta d=6)")
+        self.var_agent = tk.StringVar(value="Optimized Agent (Alpha-Beta d=6)")
         cb_agent = ttk.Combobox(
             row1,
             textvariable=self.var_agent,
             values=[
-                "Proposed: Optimized Agent (Alpha-Beta d=6)",
-                "Proposed: Optimized Agent (Alpha-Beta d=3)",
+                "Optimized Agent (Alpha-Beta d=6)",
+                "Optimized Agent (Alpha-Beta d=3)",
                 "Baseline 2: Vanilla Minimax (d=3, Static, No Pruning)",
-                "Baseline 1: Random Move Agent"
+                "Random Move Agent"
             ],
             state="readonly",
             width=38,
@@ -99,7 +99,7 @@ class BenchmarkView(tk.Frame):
         )
         cb_scripted.pack(side=tk.LEFT)
 
-        # Row 2: Games Count & Board Size & Actions
+        # Match Parameters and Actions
         row2 = tk.Frame(ctrl_card, bg=THEME['surface'])
         row2.pack(fill=tk.X, pady=(8, 4))
 
@@ -149,7 +149,7 @@ class BenchmarkView(tk.Frame):
         )
         self.lbl_status.pack(anchor="w", pady=(2, 0))
 
-        # Results Table Card
+        # Results Container
         table_card = tk.Frame(
             container,
             bg=THEME['surface'],
@@ -270,16 +270,16 @@ class BenchmarkView(tk.Frame):
             ('proposed_d6', 6, "Proposed: Optimized Agent (d=6)", 'shortest_path'),
             ('proposed_d6', 6, "Proposed: Optimized Agent (d=6)", 'sub_optimal'),
             ('proposed_d6', 6, "Proposed: Optimized Agent (d=6)", 'random'),
-            ('baseline_2_vanilla', 3, "Baseline 2: Vanilla Minimax (d=3)", 'shortest_path'),
-            ('baseline_2_vanilla', 3, "Baseline 2: Vanilla Minimax (d=3)", 'sub_optimal'),
-            ('baseline_2_vanilla', 3, "Baseline 2: Vanilla Minimax (d=3)", 'random'),
-            ('baseline_1_random', 1, "Baseline 1: Random Move Agent", 'shortest_path'),
-            ('baseline_1_random', 1, "Baseline 1: Random Move Agent", 'sub_optimal'),
-            ('baseline_1_random', 1, "Baseline 1: Random Move Agent", 'random')
+            ('baseline_2_vanilla', 3, "Vanilla Minimax (d=3)", 'shortest_path'),
+            ('baseline_2_vanilla', 3, "Vanilla Minimax (d=3)", 'sub_optimal'),
+            ('baseline_2_vanilla', 3, "Vanilla Minimax (d=3)", 'random'),
+            ('baseline_1_random', 1, "Random Move Agent", 'shortest_path'),
+            ('baseline_1_random', 1, "Random Move Agent", 'sub_optimal'),
+            ('baseline_1_random', 1, "Random Move Agent", 'random')
         ]
 
         board_size = self._parse_board_size()
-        games_per_combo = 10  # Fast batch run
+        games_per_combo = 10
 
         self.is_running = True
         self.btn_run.config(state=tk.DISABLED)
