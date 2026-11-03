@@ -208,7 +208,7 @@ class PuzzleScenario:
         self.board_size = board_size
         self.s_optimal = s_optimal
         self.s_max = 3 * s_optimal
-        self.pieces = pieces  # (r, c, owner, p_type)
+        self.pieces = pieces
         self.optimal_path = optimal_path or []
         self.is_custom = is_custom
 
@@ -245,7 +245,7 @@ class PuzzleScenario:
 
 
 # =====================================================================
-# 10 PRESET 6x6 STAGES (ALL MATHEMATICALLY VERIFIED WINNABLE)
+# PRESET STAGES MATHEMATICALLY VERIFIED WINNABLE
 # =====================================================================
 
 PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
@@ -341,12 +341,12 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
     )
 }
 
-# Classic 9x9 Benchmark Scenarios
+# Classic Benchmark Scenarios
 PRECONFIGURED_STAGES_9X9: Dict[str, PuzzleScenario] = {
     'p10_proposal': PuzzleScenario(
         id_str='p10_proposal',
-        title='Proposal Benchmark (9x9)',
-        description='Multi-piece 9x9 tactical engagement. AI acts as Optimal Defender.',
+        title='Tactical Benchmark (9x9)',
+        description='Tactical engagement. AI acts as optimal defender.',
         board_size=9,
         s_optimal=8,
         pieces=[(8, 0, 0, 'H'), (8, 1, 0, 'E'), (7, 0, 0, 'A'), (2, 2, 1, 'A'), (2, 5, 1, 'E'), (4, 3, 1, 'E'), (6, 6, 1, 'H')],
@@ -395,7 +395,7 @@ def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps:
     for attempt in range(max_attempts):
         occupied_set = {start_coord, target_coord}
 
-        # Player tactical squad: Human at start corner + 2 supportive escorts
+        # Tactical player escort squad
         player_pieces = [(start_coord[0], start_coord[1], 0, 'H')]
         support_positions = [(board_size - 1, 1), (board_size - 2, 0), (board_size - 2, 1)]
         random.shuffle(support_positions)
@@ -519,7 +519,7 @@ class PuzzleSession:
             self.neutralization_reason = "AI reached home corner"
             return 'NEUTRALIZED'
 
-        # Neutralization: Step limit exhaustion S_max = 3 * S_optimal
+        # Neutralization step limit check
         if self.current_attempt_steps >= self.s_max:
             self.is_neutralized = True
             self.neutralization_reason = f"Step limit exhausted (S_max = {self.s_max} moves)"
@@ -550,7 +550,7 @@ class PuzzleSession:
         return 'ON_TRACK'
 
 
-# Scripted Players for Baseline Evaluation Framework (Table 3)
+# Scripted Players for Baseline Evaluation Framework
 
 class ShortestPathScriptedPlayer:
     """Always moves along the shortest route to the target corner."""

@@ -1,6 +1,6 @@
 """
 Stage Winnability Verification Suite
-Validates that all 10 preset 6x6 stages and dynamically generated random stages
+Validates that preset stages
 are mathematically guaranteed to have a reachable, winnable optimal path.
 """
 
@@ -10,7 +10,7 @@ from puzzle_logic import PRECONFIGURED_STAGES_6X6, find_optimal_winning_path, ge
 
 def verify_preset_stages() -> bool:
     print("=" * 72)
-    print("VERIFYING 10 PRESET 6x6 PUZZLE STAGES")
+    print("VERIFYING PRESET PUZZLE STAGES")
     print("=" * 72)
 
     all_passed = True
@@ -60,7 +60,7 @@ def main():
 
     print("\n" + "=" * 72)
     if presets_ok and random_ok:
-        print("RESULT: ALL 10 PRESETS AND RANDOM GENERATOR ARE 100% VERIFIED WINNABLE!")
+        print("RESULT: ALL PRESET STAGES ARE VERIFIED WINNABLE!")
         print("=" * 72)
         sys.exit(0)
     else:
