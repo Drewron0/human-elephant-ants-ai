@@ -7,29 +7,29 @@ PIECE_NAMES = {
 }
 
 BEATS = {
-    'H': 'A',  # Human beats Ant
-    'A': 'E',  # Ant beats Elephant
-    'E': 'H'   # Elephant beats Human
+    'H': 'A',
+    'A': 'E',
+    'E': 'H'
 }
 
 PREDATORS = {
-    'A': 'H',  # Human beats Ant
-    'E': 'A',  # Ant beats Elephant
-    'H': 'E'   # Elephant beats Human
+    'A': 'H',
+    'E': 'A',
+    'H': 'E'
 }
 
-# Standard 9x9 default corners for backward compatibility
+# Target corner objectives
 TARGET_CORNERS = {
-    0: (0, 8),  # Player 1 (bottom) target is top-right corner
-    1: (8, 0)   # Player 2 (top) target is bottom-left corner
+    0: (0, 8),
+    1: (8, 0)
 }
 
 class Piece:
     __slots__ = ('owner', 'p_type')
 
     def __init__(self, owner: int, p_type: str):
-        self.owner = owner  # 0: Player 1, 1: Player 2
-        self.p_type = p_type  # 'H', 'E', 'A'
+        self.owner = owner
+        self.p_type = p_type
 
     def to_dict(self) -> Dict[str, Any]:
         return {'owner': self.owner, 'p_type': self.p_type}

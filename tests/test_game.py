@@ -10,7 +10,7 @@ from puzzle_logic import (
     PRECONFIGURED_STAGES_6X6,
     PuzzleScenario,
 )
-from ai_engine import evaluate_non_transitive, get_defender_move, DEFAULT_PROPOSAL_WEIGHTS
+from ai_engine import evaluate_non_transitive, get_defender_move, DEFAULT_EVALUATION_WEIGHTS
 import storage
 
 
@@ -50,7 +50,7 @@ class TestGameLogic(unittest.TestCase):
 
 class TestPuzzleLogic(unittest.TestCase):
     # Tests BFS safe path search, preset stages, and random puzzle generation
-    def test_all_10_preset_stages_winnable(self) -> None:
+    def test_preset_stages_winnable(self) -> None:
         for stage_key, scenario in PRECONFIGURED_STAGES_6X6.items():
             target = (0, scenario.board_size - 1)
             d, path, best_pc = find_optimal_winning_path(scenario.board_size, scenario.pieces, target)
@@ -133,7 +133,7 @@ class TestAIEngine(unittest.TestCase):
         state.board[5][0] = Piece(0, 'H')
         state.board[1][4] = Piece(1, 'E')
 
-        score = evaluate_non_transitive(state, DEFAULT_PROPOSAL_WEIGHTS)
+        score = evaluate_non_transitive(state, DEFAULT_EVALUATION_WEIGHTS)
         self.assertIsInstance(score, (int, float))
 
     def test_defender_move_selection(self) -> None:

@@ -5,17 +5,19 @@ from typing import Tuple, Optional, List, Dict, Any
 from game_logic import GameState, Piece, BEATS, PREDATORS
 
 PIECE_VALUES = {
-    'E': 14.0,  # Elephant
-    'H': 12.0,  # Human
-    'A': 10.0   # Ant
+    'E': 14.0,
+    'H': 12.0,
+    'A': 10.0
 }
 
-DEFAULT_PROPOSAL_WEIGHTS = {
-    'wm': 1.0,  # Dynamic Material Score weight
-    'wc': 1.5,  # Predator-Prey Proximity Score weight
-    'wp': 0.5,  # Positional and Mobility Score weight
-    'wt': 2.5   # Target Progress Score weight
-}
+DEFAULT_EVALUATION_WEIGHTS = {
+    'wm': 1.0,
+    'wc': 1.5,
+    'wp': 0.5,
+    'wt': 2.5
+}
+DEFAULT_PROPOSAL_WEIGHTS = DEFAULT_EVALUATION_WEIGHTS
+
 
 
 def chebyshev_distance(p1: Tuple[int, int], p2: Tuple[int, int]) -> int:
@@ -23,13 +25,13 @@ def chebyshev_distance(p1: Tuple[int, int], p2: Tuple[int, int]) -> int:
 
 
 # =====================================================================
-# PROPOSAL IMPLEMENTATION: NON-TRANSITIVE HEURISTIC EVALUATION E(s)
+# E(s)
 # E(s) = wm * M(s) + wc * C(s) + wp * P(s) + wt * T(s)
 # =====================================================================
 
 def evaluate_non_transitive(state: GameState, weights: Optional[Dict[str, float]] = None) -> float:
     """
-    Evaluates board state s from Player 0's perspective according to the proposal formula:
+    Evaluates board state s from Player 0's perspective:
     E(s) = wm * M(s) + wc * C(s) + wp * P(s) + wt * T(s)
     Uses a highly optimized single-pass board scanner.
     """
@@ -98,7 +100,7 @@ def evaluate_non_transitive(state: GameState, weights: Optional[Dict[str, float]
                     if d < min_d1:
                         min_d1 = d
 
-    # 1. Dynamic Material Score M(s)
+    # Dynamic Material Score M(s)
     def calc_mat(pieces, opp_dist):
         tot = 0.0
         for r, c, pt in pieces:
@@ -110,7 +112,7 @@ def evaluate_non_transitive(state: GameState, weights: Optional[Dict[str, float]
 
     m_score = calc_mat(p0_pieces, p1_counts) - calc_mat(p1_pieces, p0_counts)
 
-    # 2. Predator-Prey Proximity Score C(s)
+    # Predator-Prey Proximity Score C(s)
     def calc_prox(friendly, hostile):
         score = 0.0
         for fr, fc, fpt in friendly:
@@ -130,10 +132,10 @@ def evaluate_non_transitive(state: GameState, weights: Optional[Dict[str, float]
 
     c_score = calc_prox(p0_pieces, p1_pieces) - calc_prox(p1_pieces, p0_pieces)
 
-    # 3. Positional and Mobility Score P(s)
+    # Positional and Mobility Score P(s)
     p_score = (mobility_est_0 - mobility_est_1) * 0.75 + (center_0 - center_1) * 1.5
 
-    # 4. Target Progress Score T(s)
+    # Target Progress Score T(s)
     prog_0 = (size - min_d0) * 14.0
     if min_d0 <= 1:
         prog_0 += 150.0
@@ -201,7 +203,7 @@ def order_moves_mvv_lva(moves: List[Tuple[Tuple[int, int], Tuple[int, int]]],
 
 
 # =====================================================================
-# PROPOSAL SEARCH TELEMETRY & ALGORITHMIC ARCHITECTURES
+# SEARCH TELEMETRY AND ALGORITHMIC ARCHITECTURES
 # =====================================================================
 
 class SearchTelemetry:
@@ -220,7 +222,7 @@ class SearchTelemetry:
         return max(0.0, (1.0 - (self.nodes_evaluated / self.nodes_generated)) * 100.0)
 
 
-# Proposed Method: Minimax with Alpha-Beta Pruning, MVV-LVA, and E(s)
+# Optimized Minimax with Alpha-Beta Pruning and Move Ordering
 def _minimax_ab_internal(state: GameState, depth: int, alpha: float, beta: float,
                          maximizing: bool, weights: Dict[str, float],
                          telemetry: SearchTelemetry, deadline: Optional[float] = None) -> Tuple[float, Optional[Tuple[Tuple[int, int], Tuple[int, int]]]]:
@@ -272,7 +274,7 @@ def _minimax_ab_internal(state: GameState, depth: int, alpha: float, beta: float
                 best_move = m
             alpha = max(alpha, val)
             if beta <= alpha:
-                break  # Alpha-Beta cutoff
+                break
 
         return max_eval, best_move
     else:
@@ -305,12 +307,12 @@ def _minimax_ab_internal(state: GameState, depth: int, alpha: float, beta: float
                 best_move = m
             beta = min(beta, val)
             if beta <= alpha:
-                break  # Alpha-Beta cutoff
+                break
 
         return min_eval, best_move
 
 
-# Baseline 2: Vanilla Minimax (Depth 3, Static Material, No Pruning)
+# Vanilla Minimax Baseline
 def _evaluate_static_material(state: GameState) -> float:
     if state.winner == 0:
         return 100000.0
@@ -411,7 +413,7 @@ def get_defender_move(state: GameState, agent_model: str = 'proposed_d6',
     Optimal defensive action tuple A = (SourceCoord, TargetCoord, EvalScore).
     """
     telemetry = SearchTelemetry()
-    valid_moves = state.get_valid_moves(1)  # Defender is Player 1
+    valid_moves = state.get_valid_moves(1)
     if not valid_moves:
         return None, 100000.0, telemetry
 
@@ -430,7 +432,7 @@ def get_defender_move(state: GameState, agent_model: str = 'proposed_d6',
     model_clean = agent_model.lower()
 
     if 'baseline_1' in model_clean or 'random' in model_clean:
-        # Baseline 1: Random Move Agent
+        # Random Move Baseline Agent
         chosen = random.choice(valid_moves)
         telemetry.nodes_generated = len(valid_moves)
         telemetry.nodes_evaluated = 1
@@ -439,7 +441,7 @@ def get_defender_move(state: GameState, agent_model: str = 'proposed_d6',
         return chosen, 0.0, telemetry
 
     elif 'baseline_2' in model_clean or 'vanilla' in model_clean:
-        # Baseline 2: Vanilla Minimax Agent (d=3, static, no pruning)
+        # Vanilla Minimax Baseline Agent
         d = 3 if depth is None else depth
         eval_score, move = _minimax_vanilla_internal(state, depth=d, maximizing=False, telemetry=telemetry)
         t1 = time.time()
@@ -447,9 +449,9 @@ def get_defender_move(state: GameState, agent_model: str = 'proposed_d6',
         return move or random.choice(valid_moves), eval_score, telemetry
 
     else:
-        # Proposed Method: Optimized Minimax with Alpha-Beta Pruning, MVV-LVA & E(s)
+        # Optimized Minimax Agent with Alpha-Beta Pruning
         d = depth if depth is not None else 6
-        deadline = t0 + 1.95  # Strict 2.0s time budget as required in proposal Table 1 & 3
+        deadline = t0 + 1.95
         eval_score, move = _minimax_ab_internal(state, depth=d, alpha=-math.inf, beta=math.inf,
                                                 maximizing=False, weights=w, telemetry=telemetry, deadline=deadline)
         t1 = time.time()
@@ -599,7 +601,7 @@ class AIEngine:
         stats = SearchStats()
 
         if diff == 'proposed':
-            # Use proposed Alpha-Beta search at depth 6
+            # Search using optimized agent
             best_m, _, telemetry = get_defender_move(state, 'proposed_d6', depth=6)
             delay = min(2.0, max(0.5, telemetry.t_turn))
             return best_m or random.choice(valid_moves), delay
