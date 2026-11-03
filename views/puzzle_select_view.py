@@ -19,8 +19,8 @@ def _generate_random_challenges(results):
     try:
         puzzles = [
             generate_winnable_puzzle(board_size=6, min_steps=5, max_steps=7),
-            generate_winnable_puzzle(board_size=6, min_steps=6, max_steps=8),
-            generate_winnable_puzzle(board_size=6, min_steps=7, max_steps=10)
+            generate_winnable_puzzle(board_size=7, min_steps=6, max_steps=8),
+            generate_winnable_puzzle(board_size=8, min_steps=7, max_steps=10)
         ]
         results.put((puzzles, None))
     except Exception as exc:
@@ -389,7 +389,7 @@ class PuzzleSelectView(tk.Frame):
 
         self.lbl_selected_title.config(text=puzzle.title)
         self.lbl_selected_desc.config(text=puzzle.description or "Tactical puzzle scenario.")
-        self.lbl_selected_stats.config(text=f"{puzzle.board_size}x{puzzle.board_size} Board | Optimal: {puzzle.s_optimal} steps | Move Limit: {puzzle.s_max}")
+        self.lbl_selected_stats.config(text=f"{puzzle.board_size}x{puzzle.board_size} Board | {puzzle.step_label}: {puzzle.s_optimal} steps | Move Limit: {puzzle.s_max}")
 
         if getattr(puzzle, 'is_custom', False):
             self.frame_custom_actions.pack(fill=tk.X, pady=(0, 8))
@@ -432,7 +432,7 @@ class PuzzleSelectView(tk.Frame):
 
             tk.Label(
                 row,
-                text=f"{steps} moves (Delay: +{delta}) | {undos}u",
+                text=f"{steps} moves (Extra vs ref: +{delta}) | {undos}u",
                 font=(FONT_NAME, 8),
                 bg=THEME['surface_light'],
                 fg=THEME['accent'] if idx == 1 else THEME['text_muted']

@@ -50,16 +50,11 @@ class TestGameLogic(unittest.TestCase):
 
 class TestPuzzleLogic(unittest.TestCase):
     # Tests BFS safe path search, preset stages, and random puzzle generation
-    def test_preset_stages_winnable(self) -> None:
+    def test_legacy_presets_do_not_claim_unproven_optima(self) -> None:
         for stage_key, scenario in PRECONFIGURED_STAGES_6X6.items():
-            target = (0, scenario.board_size - 1)
-            d, path, best_pc = find_optimal_winning_path(scenario.board_size, scenario.pieces, target)
-            self.assertIsNotNone(
-                path,
-                f"Preset stage '{stage_key}' must have a valid winning path"
-            )
-            self.assertIsNotNone(d)
-            self.assertGreaterEqual(d, 1)
+            self.assertEqual(scenario.verification_status, 'UNVERIFIED', stage_key)
+            self.assertEqual(scenario.optimal_path, [])
+            self.assertIn('unverified', scenario.step_label)
 
     def test_random_winnable_generator(self) -> None:
         for _ in range(3):

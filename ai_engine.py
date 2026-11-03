@@ -378,8 +378,8 @@ def _minimax_vanilla_internal(state: GameState, depth: int, maximizing: bool,
 
 
 def get_defender_move(state: GameState, agent_model: str = 'proposed_d6',
-                      depth: int = 6, weights: Optional[Dict[str, float]] = None,
-                      time_budget: float = 1.95) -> Tuple[Optional[Tuple[Tuple[int, int], Tuple[int, int]]], float, SearchTelemetry]:
+                      depth: Optional[int] = None, weights: Optional[Dict[str, float]] = None,
+                      time_budget: float = 1.95, rng=None) -> Tuple[Optional[Tuple[Tuple[int, int], Tuple[int, int]]], float, SearchTelemetry]:
     """
     Main interface for AI Defender:
     Returns (best_move, eval_score, telemetry)
@@ -399,7 +399,7 @@ def get_defender_move(state: GameState, agent_model: str = 'proposed_d6',
 
     if 'baseline_1' in model_clean or 'random' in model_clean:
         # Random Move Baseline Agent
-        chosen = random.choice(valid_moves)
+        chosen = (rng or random).choice(valid_moves)
         telemetry.t_turn = time.perf_counter() - t0
         return chosen, 0.0, telemetry
 

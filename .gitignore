@@ -31,3 +31,4 @@ app_config.json
 
 # Scratch & temporary test scripts
 scratch/
+benchmark_results*/

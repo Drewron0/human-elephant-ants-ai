@@ -8,7 +8,7 @@ from ui_theme import (
     ThemedModal, draw_star, bind_mousewheel
 )
 from game_logic import GameState, Piece
-from puzzle_logic import PuzzleScenario, PuzzleSession, PRECONFIGURED_PUZZLES, generate_winnable_puzzle
+from puzzle_logic import PuzzleScenario, PuzzleSession, PRECONFIGURED_PUZZLES, generate_winnable_puzzle, make_puzzle_move
 from ai_engine import get_defender_move, DEFAULT_EVALUATION_WEIGHTS
 import storage
 
@@ -71,7 +71,7 @@ class PuzzleGameView(tk.Frame):
 
         tk.Label(
             title_box,
-            text=f"- Optimal Steps: {self.session.s_optimal} | Move Limit: {self.session.s_max}",
+            text=f"{self.scenario.step_label}: {self.session.s_optimal} | Move Limit: {self.session.s_max}",
             font=(FONT_NAME, 9),
             bg=THEME['surface'],
             fg=THEME['text_muted']
@@ -368,7 +368,7 @@ class PuzzleGameView(tk.Frame):
                 self._draw_board()
 
     def _execute_player_move(self, start: Tuple[int, int], end: Tuple[int, int]):
-        move = self.state.make_move(start, end)
+        move = make_puzzle_move(self.state, start, end)
         if not move:
             return
 
@@ -389,9 +389,12 @@ class PuzzleGameView(tk.Frame):
             return
 
         if self.state.current_turn == 1 and self.is_game_active:
-            self.after(40, self._trigger_ai_move)
+            self.ai_timer_id = self.after(40, self._trigger_ai_move)
 
     def _trigger_ai_move(self):
+        self.ai_timer_id = None
+        if not self.is_game_active or self.state.current_turn != 1:
+            return
         agent_model = self.config.get('agent_model', 'proposed_d6')
         depth = self.config.get('search_depth', 6)
         weights = self.config.get('weights', DEFAULT_EVALUATION_WEIGHTS)
@@ -404,7 +407,9 @@ class PuzzleGameView(tk.Frame):
         )
 
         if not best_move:
-            self._handle_puzzle_finish(solved=True)
+            self.state.current_turn = 0
+            self.state.winner = None
+            self._update_ui_state()
             return
 
         s, e = best_move
@@ -415,13 +420,15 @@ class PuzzleGameView(tk.Frame):
             t_turn=telemetry.t_turn,
             nodes_gen=telemetry.nodes_generated,
             nodes_eval=telemetry.nodes_evaluated,
-            prune_efficiency=telemetry.pruning_efficiency
+            prune_efficiency=telemetry.pruning_efficiency,
+            completed_depth=telemetry.completed_depth, timed_out=telemetry.timed_out
         )
 
         def do_move():
+            self.ai_timer_id = None
             if not self.is_game_active:
                 return
-            self.state.make_move(s, e)
+            make_puzzle_move(self.state, s, e)
             self.last_move = (s, e)
             self._update_ui_state()
 
@@ -443,9 +450,11 @@ class PuzzleGameView(tk.Frame):
 
         delta = self.session.delay_margin
         if delta == 0:
-            self.lbl_delay.config(text="Delay: 0 moves (Optimal)", fg=THEME['success'])
+            self.lbl_delay.config(text="Extra vs reference: 0" if self.scenario.verification_status != 'VERIFIED'
+                                  else "Delay: 0 moves", fg=THEME['success'])
         else:
-            self.lbl_delay.config(text=f"Delay: +{delta} moves", fg=THEME['warning'])
+            label = 'Delay' if self.scenario.verification_status == 'VERIFIED' else 'Extra vs reference'
+            self.lbl_delay.config(text=f"{label}: +{delta} moves", fg=THEME['warning'])
 
         self.lbl_sub_stats.config(
             text=f"Resets: {self.session.resets_count} | Undos: {self.session.undo_count}"
@@ -478,7 +487,8 @@ class PuzzleGameView(tk.Frame):
             t = last['t_turn']
             prune = last['prune_efficiency']
             self.lbl_ai_metrics.config(
-                text=f"Latency: {t:.3f}s (<=2.0s) | Prune: {prune:.1f}%"
+                text=f"Latency: {t:.3f}s | Prune: {prune:.1f}% | Depth: {last['completed_depth']}"
+                     + (" (time limit)" if last['timed_out'] else "")
             )
 
         # Move History
@@ -497,15 +507,22 @@ class PuzzleGameView(tk.Frame):
         if not self.config.get('undo_enabled', True) or not self.is_game_active:
             return
 
+        if self.ai_timer_id is not None:
+            self.after_cancel(self.ai_timer_id)
+            self.ai_timer_id = None
         if self.state.undo(player_idx=0):
             self.session.record_undo()
-            self.state.undo(player_idx=0)
+            if self.state.current_turn == 1:
+                self.state.undo(player_idx=0)
 
         self.selected_sq = None
         self.valid_targets = []
         self._update_ui_state()
 
     def _on_reset_attempt(self):
+        if self.ai_timer_id is not None:
+            self.after_cancel(self.ai_timer_id)
+            self.ai_timer_id = None
         self.session.reset_attempt()
         self.state = self.scenario.create_initial_state()
         self.selected_sq = None
@@ -549,8 +566,8 @@ class PuzzleGameView(tk.Frame):
 
             summary = (
                 f"You reached the corner in {self.session.current_attempt_steps} steps "
-                f"(Optimal: {self.session.s_optimal}).\n"
-                f"Forced Delay Margin: +{self.session.delay_margin} moves | Time: {time_spent}s."
+                f"({self.scenario.step_label}: {self.session.s_optimal}).\n"
+                f"Extra vs reference: +{self.session.delay_margin} moves | Time: {time_spent}s."
             )
         else:
             tk.Label(
@@ -563,7 +580,7 @@ class PuzzleGameView(tk.Frame):
 
             cause = reason or "Target rendered unreachable"
             summary = (
-                f"The AI optimal defender neutralized your advance.\n"
+                f"The defender stopped your advance.\n"
                 f"Cause: {cause}."
             )
 
@@ -620,7 +637,7 @@ class PuzzleGameView(tk.Frame):
         content = (
             "1. Objective:\n"
             f"   Navigate your piece to the opponent's star corner within Move Limit={self.session.s_max} moves.\n"
-            f"   The optimal path takes {self.session.s_optimal} steps.\n\n"
+            f"   {self.scenario.step_label}: {self.session.s_optimal} steps.\n\n"
             "2. Combat Hierarchy:\n"
             "   Elephant (E) defeats Human (H)\n"
             "   Human (H) defeats Ant (A)\n"

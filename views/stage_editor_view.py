@@ -350,26 +350,26 @@ class StageEditorView(tk.Frame):
             piece_name = {'H': 'Human', 'E': 'Elephant', 'A': 'Ant'}.get(best_pc[2], best_pc[2]) if best_pc else "Piece"
             self.last_verification = {'winnable': True, 's_optimal': d, 'path': path, 'best_piece': best_pc}
             self.lbl_verify_status.config(text=f"Status: WINNABLE ({d} Steps)", fg=THEME['success'])
-            self.lbl_verify_detail.config(text=f"Safe path found in {d} moves using {piece_name}. Move limit: {s_max} moves.")
+            self.lbl_verify_detail.config(text=f"Forced corner win in {d} moves. Move limit: {s_max} moves.")
             if not silent:
                 modal = ThemedModal(self, "Verification Successful", min_width=340)
-                tk.Label(modal.body, text=f"Stage is 100% winnable!\nOptimal Steps: {d}\nMove Limit: {s_max}\nBest Lead: {piece_name}", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['text'], justify="center").pack(pady=10)
+                tk.Label(modal.body, text=f"Forced corner win verified.\nOptimal Steps: {d}\nMove Limit: {s_max}", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['text'], justify="center").pack(pady=10)
                 ButtonPrimary(modal.footer, text="Understood", command=modal.dismiss).pack(side=tk.RIGHT)
             return True
         else:
             self.last_verification = {'winnable': False, 's_optimal': 0, 'path': [], 'best_piece': None}
-            self.lbl_verify_status.config(text="Status: UNWINNABLE", fg=THEME['danger'])
-            self.lbl_verify_detail.config(text="Target corner is unreachable or trapped in predator zones. Adjust pieces.")
+            self.lbl_verify_status.config(text="Status: UNVERIFIED", fg=THEME['warning'])
+            self.lbl_verify_detail.config(text="No proof obtained within the search budget and move horizon.")
             if not silent:
                 modal = ThemedModal(self, "Verification Failed", min_width=340)
-                tk.Label(modal.body, text="No safe path exists from any player piece to the star corner!\nPlease adjust defender positions or add supporting player units.", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['danger'], justify="center").pack(pady=10)
+                tk.Label(modal.body, text="No forced-win proof obtained within the verification budget.\nThis does not prove the stage is unwinnable.", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['warning'], justify="center").pack(pady=10)
                 ButtonPrimary(modal.footer, text="Close", command=modal.dismiss).pack(side=tk.RIGHT)
             return False
 
     def _save_stage(self):
         if not self._verify_winnability(silent=True):
-            modal = ThemedModal(self, "Cannot Save Unwinnable Stage", min_width=360)
-            tk.Label(modal.body, text="Stage must be verified as winnable before saving.\nPlease adjust piece layout so a safe path exists to the star corner.", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['danger']).pack(pady=10)
+            modal = ThemedModal(self, "Cannot Save Unverified Stage", min_width=360)
+            tk.Label(modal.body, text="Stage needs a forced-win proof before saving.\nTry a simpler layout within the verification budget.", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['danger']).pack(pady=10)
             ButtonPrimary(modal.footer, text="Understood", command=modal.dismiss).pack(side=tk.RIGHT)
             return
 
@@ -387,6 +387,8 @@ class StageEditorView(tk.Frame):
             's_optimal': s_opt,
             'pieces': pieces_list,
             'optimal_path': path,
+            'verification_status': 'VERIFIED',
+            'verification_method': 'bounded_verifier',
             'is_custom': True
         }
 

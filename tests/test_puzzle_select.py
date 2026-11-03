@@ -194,8 +194,8 @@ class TestPuzzleSelect(unittest.TestCase):
         self.assertTrue(all(thread_id != get_ident() for thread_id in worker_threads))
         self.assertEqual(generate.call_args_list, [
             call(board_size=6, min_steps=5, max_steps=7),
-            call(board_size=6, min_steps=6, max_steps=8),
-            call(board_size=6, min_steps=7, max_steps=10),
+            call(board_size=7, min_steps=6, max_steps=8),
+            call(board_size=8, min_steps=7, max_steps=10),
         ])
 
     @patch('views.puzzle_select_view.generate_winnable_puzzle', side_effect=ValueError('Bad board'))

@@ -1,6 +1,6 @@
 # Chess-Sut: Human-Elephant-Ant AI Tactical Game
 
-An adversarial tactical board game and AI research framework developed for the Artificial Intelligence course at Universitas Ciputra Surabaya (2026). The project implements an optimal defender AI agent for tactical puzzle scenarios using Minimax with Alpha-Beta Pruning, Move Ordering, Non-Transitive Cyclic Evaluation, and automated winnability verification.
+An adversarial tactical board game and AI research framework developed for the Artificial Intelligence course at Universitas Ciputra Surabaya (2026). The defender uses depth-limited Minimax with Alpha-Beta Pruning, move ordering, and non-transitive evaluation. Bounded puzzle verification reports uncertainty explicitly; the playing agent is not a proof of globally optimal defense.
 
 ---
 
@@ -13,7 +13,7 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 - **Ant (A)** defeats **Elephant (E)**
 
 ### Movement and Objectives
-- Pieces move orthogonally (up, down, left, right) one step per turn into an adjacent empty square or to capture an enemy piece according to cyclic dominance.
+- Pieces move one step in any of the eight adjacent directions, including diagonals, into an empty square or a permitted cyclic capture.
 - Pieces cannot capture enemies of the same type or their predator.
 - **Victory Condition:** A player wins by navigating any piece to the opponent's starting corner (Player 1 targets top-right, Player 2 targets bottom-left).
 
@@ -26,16 +26,16 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 - Fluid, interactive splitters (`tk.PanedWindow`) allowing users to resize sidebars while the board dynamically scales to fit the container.
 
 ### Tactical Stage Studio & Custom Stage Builder
-- **Preset Tactical Stages:** Curated tactical scenarios with varying optimal solution lengths (optimal steps from 5 to 9) and maximum move limits (S_max = 3 * optimal).
-- **Custom Stage Editor:** Full visual board editor and CRUD manager supporting 6x6 to 9x9 board sizes, piece palette, right-click removal, hotkeys 1-6 & 7/0, and instant winnability solver.
-- **Procedural Winnability Generator:** Automated generation of proven winnable challenge stages in background threads.
+- **Preset Tactical Stages:** Legacy tactical boards remain playable with reference step counts and limits. Their invalid stored routes were removed; their counts are labeled unverified, not optimal.
+- **Custom Stage Editor:** Existing board editor with bounded adversarial verification. Every legal defensive reply is considered. A budget exhaustion returns `UNVERIFIED`; a completed negative search means no forced corner win within its horizon, not a proof of permanent impossibility. Static BFS is never used as a forced-win proof.
+- **Procedural Winnability Generator:** Certified sparse race puzzles, generated in background threads. A single attacker can capture every defender, and geometric distance proves its earliest corner arrival precedes the defender's earliest win. Different sizes provide different exact step counts.
 - **Stage Selection and Thumbnails:** Interactive catalog featuring live board thumbnail previews, AI difficulty mode selectors, player selection, and per-stage leaderboard tracking.
 - **Spoiler Prevention Toggle:** Toggle search metrics display before playing to prevent move spoilers.
 
 ### Adversarial Search Architecture
 - **Algorithm:** Minimax Search with Alpha-Beta Pruning, Leaf Node Evaluation, and Dynamic Move Ordering.
 - **Non-Transitive Evaluation Function:** Dynamic piece weights computed from opponent's remaining suit distribution combined with corner distance Chebyshev/Manhattan heuristics.
-- **Turn Time Guarantee:** Strict time check ensuring all AI moves return in under 2.0 seconds (T_turn <= 2.0s).
+- **Search Budget:** Optimized search uses iterative deepening with a 1.95-second budget and a legal fallback. An interrupted iteration is discarded and the board is restored. Telemetry reports completed depth and timeouts; depth 6 and a hard wall-clock bound are not guaranteed on arbitrary hardware. The vanilla baseline has no time cutoff.
 
 ---
 
@@ -104,16 +104,26 @@ python main.py
 ```
 
 ### Run Stage Winnability Verification
-Validates that all 10 preset 6x6 stages and 20 procedurally generated random stages are 100% winnable:
+Reports exact bounded verification for legacy boards and 20 generated benchmark puzzles. Exit codes: 0 = verified, 1 = no forced win within the horizon, 2 = verification budget exhausted. To check only generated puzzles:
 ```bash
 python verify_stages.py
+python verify_stages.py --generated-only
 ```
 
 ### Run Algorithmic Benchmark Simulation
-Executes automated AI defender simulations across test positions to evaluate nodes generated, nodes evaluated, pruning efficiency, and execution time:
+The default runs **1,000 games for each of 12 combinations (12,000 games)**: optimized depth 6 and depth 3, vanilla depth 3, and random, each against shortest-path, sub-optimal, and random players. The GUI uses the same defaults and models; its full-table button respects the selected game count.
+
+Every combination receives the same seeded random corpus of certified **10-step, 11x11 sparse race puzzles** (30-step limit). They form a deliberately restricted, cheaply provable family, not a representative sample of arbitrary tactical boards. The attacker needs at least 10 king-like moves; defenders cannot capture it or reach their own goal before its tenth move. This makes the 10-step baseline exact. Results should not be generalized to every puzzle distribution.
+
+The shortest-path player replans an actual shortest legal route on the current frozen board. It does not predict future defender moves. The sub-optimal player chooses a different legal move with probability 25%. Player and defender random streams are separate and reproducible.
 ```bash
 python run_benchmark.py
+python run_benchmark.py --games 1 --seed 42 --output-dir benchmark_results_smoke
 ```
+
+The full experiment can take substantial CPU time. `benchmark_results/` contains `corpus.json`, `results.csv`, and `turns.jsonl` (per-turn actions, evaluation scores, timings, visited/generated nodes, cutoff counts, completed depth, and timeout flags). Completed combinations are saved as they finish; rerunning into the same output directory replaces those reports. The CSV includes a corpus hash, seed, maximum latency, and full-depth completion rate. The GUI exports aggregate CSV results.
+
+Pruning efficiency is `100 * skipped_children_at_alpha_beta_cutoffs / generated_children`, aggregated across turns and deepening iterations. It measures generated child opportunities, not the size of an unbuilt full tree. Timeouts are not pruning, and random and vanilla agents report zero. Delay margin is the mean signed `actual_steps - verified_optimum` over solved games; it is blank/N/A when no games are solved. Capturing the last defender does not end a puzzle: the player must still reach the corner.
 
 ### Run Unit Tests
 ```bash
