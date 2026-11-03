@@ -210,16 +210,24 @@ class SearchTelemetry:
     def __init__(self):
         self.nodes_generated: int = 0
         self.nodes_evaluated: int = 0
+        self.nodes_pruned: int = 0
         self.t_turn: float = 0.0
+        self.completed_depth: int = 0
+        self.timed_out: bool = False
 
     @property
     def pruning_efficiency(self) -> float:
         """
-        Pruning efficiency: prune = (1 - n_evaluated / n_generated) * 100%
+        Percentage of generated child moves skipped by alpha-beta cutoffs.
+        Unfinished work at a timeout is not counted as pruning.
         """
         if self.nodes_generated <= 0:
             return 0.0
-        return max(0.0, (1.0 - (self.nodes_evaluated / self.nodes_generated)) * 100.0)
+        return 100.0 * self.nodes_pruned / self.nodes_generated
+
+
+class SearchTimeout(Exception):
+    pass
 
 
 # Optimized Minimax with Alpha-Beta Pruning and Move Ordering
@@ -228,13 +236,18 @@ def _minimax_ab_internal(state: GameState, depth: int, alpha: float, beta: float
                          telemetry: SearchTelemetry, deadline: Optional[float] = None) -> Tuple[float, Optional[Tuple[Tuple[int, int], Tuple[int, int]]]]:
     current_player = 0 if maximizing else 1
 
-    if depth == 0 or state.winner is not None or (deadline and time.time() > deadline):
-        return evaluate_non_transitive(state, weights), None
+    if deadline is not None and time.perf_counter() >= deadline:
+        raise SearchTimeout
+    if state.winner is not None:
+        return ((100000.0 + depth) if state.winner == 0 else (-100000.0 - depth)), None
 
     valid_moves = state.get_valid_moves(current_player)
     if not valid_moves:
         # Player without moves loses
-        return (100000.0 if not maximizing else -100000.0), None
+        return ((100000.0 + depth) if not maximizing else (-100000.0 - depth)), None
+
+    if depth == 0:
+        return evaluate_non_transitive(state, weights), None
 
     ordered = order_moves_mvv_lva(valid_moves, state, current_player)
     telemetry.nodes_generated += len(ordered)
@@ -242,74 +255,34 @@ def _minimax_ab_internal(state: GameState, depth: int, alpha: float, beta: float
 
     target_win_coord = state.target_corners[current_player]
 
-    if maximizing:
-        max_eval = -math.inf
-        for m in ordered:
-            if deadline and time.time() > deadline:
-                break
-            telemetry.nodes_evaluated += 1
-            s, e = m
-            piece = state.board[s[0]][s[1]]
-            target_piece = state.board[e[0]][e[1]]
-
-            # Execute in-place
-            state.board[e[0]][e[1]] = piece
-            state.board[s[0]][s[1]] = None
-            old_winner = state.winner
-            if e == target_win_coord:
-                state.winner = 0
-
-            if state.winner == 0:
-                val = 100000.0
-            else:
-                val, _ = _minimax_ab_internal(state, depth - 1, alpha, beta, False, weights, telemetry, deadline)
-
-            # Revert in-place
-            state.board[s[0]][s[1]] = piece
-            state.board[e[0]][e[1]] = target_piece
+    best_eval = -math.inf if maximizing else math.inf
+    for index, m in enumerate(ordered):
+        if deadline is not None and time.perf_counter() >= deadline:
+            raise SearchTimeout
+        telemetry.nodes_evaluated += 1
+        s, e = m
+        piece = state.board[s[0]][s[1]]
+        target_piece = state.board[e[0]][e[1]]
+        old_winner = state.winner
+        state.board[e[0]][e[1]], state.board[s[0]][s[1]] = piece, None
+        if e == target_win_coord:
+            state.winner = current_player
+        try:
+            val, _ = _minimax_ab_internal(state, depth - 1, alpha, beta,
+                                          not maximizing, weights, telemetry, deadline)
+        finally:
+            state.board[s[0]][s[1]], state.board[e[0]][e[1]] = piece, target_piece
             state.winner = old_winner
-
-            if val > max_eval:
-                max_eval = val
-                best_move = m
+        if (maximizing and val > best_eval) or (not maximizing and val < best_eval):
+            best_eval, best_move = val, m
+        if maximizing:
             alpha = max(alpha, val)
-            if beta <= alpha:
-                break
-
-        return max_eval, best_move
-    else:
-        min_eval = math.inf
-        for m in ordered:
-            if deadline and time.time() > deadline:
-                break
-            telemetry.nodes_evaluated += 1
-            s, e = m
-            piece = state.board[s[0]][s[1]]
-            target_piece = state.board[e[0]][e[1]]
-
-            state.board[e[0]][e[1]] = piece
-            state.board[s[0]][s[1]] = None
-            old_winner = state.winner
-            if e == target_win_coord:
-                state.winner = 1
-
-            if state.winner == 1:
-                val = -100000.0
-            else:
-                val, _ = _minimax_ab_internal(state, depth - 1, alpha, beta, True, weights, telemetry, deadline)
-
-            state.board[s[0]][s[1]] = piece
-            state.board[e[0]][e[1]] = target_piece
-            state.winner = old_winner
-
-            if val < min_eval:
-                min_eval = val
-                best_move = m
+        else:
             beta = min(beta, val)
-            if beta <= alpha:
-                break
-
-        return min_eval, best_move
+        if beta <= alpha:
+            telemetry.nodes_pruned += len(ordered) - index - 1
+            break
+    return best_eval, best_move
 
 
 # Vanilla Minimax Baseline
@@ -405,58 +378,55 @@ def _minimax_vanilla_internal(state: GameState, depth: int, maximizing: bool,
 
 
 def get_defender_move(state: GameState, agent_model: str = 'proposed_d6',
-                      depth: int = 6, weights: Optional[Dict[str, float]] = None) -> Tuple[Optional[Tuple[Tuple[int, int], Tuple[int, int]]], float, SearchTelemetry]:
+                      depth: int = 6, weights: Optional[Dict[str, float]] = None,
+                      time_budget: float = 1.95) -> Tuple[Optional[Tuple[Tuple[int, int], Tuple[int, int]]], float, SearchTelemetry]:
     """
     Main interface for AI Defender:
     Returns (best_move, eval_score, telemetry)
     where best_move is ((start_r, start_c), (end_r, end_c)).
     Optimal defensive action tuple A = (SourceCoord, TargetCoord, EvalScore).
     """
+    t0 = time.perf_counter()
     telemetry = SearchTelemetry()
     valid_moves = state.get_valid_moves(1)
     if not valid_moves:
+        telemetry.t_turn = time.perf_counter() - t0
         return None, 100000.0, telemetry
 
-    # Instant victory check for defender
-    defender_target = state.target_corners[1]
-    for m in valid_moves:
-        if m[1] == defender_target:
-            telemetry.nodes_generated = len(valid_moves)
-            telemetry.nodes_evaluated = 1
-            telemetry.t_turn = 0.001
-            return m, -100000.0, telemetry
-
     w = weights if weights else DEFAULT_PROPOSAL_WEIGHTS
-    t0 = time.time()
 
     model_clean = agent_model.lower()
 
     if 'baseline_1' in model_clean or 'random' in model_clean:
         # Random Move Baseline Agent
         chosen = random.choice(valid_moves)
-        telemetry.nodes_generated = len(valid_moves)
-        telemetry.nodes_evaluated = 1
-        t1 = time.time()
-        telemetry.t_turn = max(0.001, t1 - t0)
+        telemetry.t_turn = time.perf_counter() - t0
         return chosen, 0.0, telemetry
 
     elif 'baseline_2' in model_clean or 'vanilla' in model_clean:
         # Vanilla Minimax Baseline Agent
         d = 3 if depth is None else depth
         eval_score, move = _minimax_vanilla_internal(state, depth=d, maximizing=False, telemetry=telemetry)
-        t1 = time.time()
-        telemetry.t_turn = max(0.001, t1 - t0)
+        telemetry.completed_depth = d
+        telemetry.t_turn = time.perf_counter() - t0
         return move or random.choice(valid_moves), eval_score, telemetry
 
     else:
         # Optimized Minimax Agent with Alpha-Beta Pruning
         d = depth if depth is not None else 6
-        deadline = t0 + 1.95
-        eval_score, move = _minimax_ab_internal(state, depth=d, alpha=-math.inf, beta=math.inf,
-                                                maximizing=False, weights=w, telemetry=telemetry, deadline=deadline)
-        t1 = time.time()
-        telemetry.t_turn = max(0.001, t1 - t0)
-        return move or random.choice(valid_moves), eval_score, telemetry
+        deadline = t0 + max(0.0, time_budget)
+        move, eval_score = valid_moves[0], evaluate_non_transitive(state, w)
+        for horizon in range(1, d + 1):
+            try:
+                score, candidate = _minimax_ab_internal(state, horizon, -math.inf, math.inf,
+                                                         False, w, telemetry, deadline)
+            except SearchTimeout:
+                telemetry.timed_out = True
+                break
+            move, eval_score = candidate or move, score
+            telemetry.completed_depth = horizon
+        telemetry.t_turn = time.perf_counter() - t0
+        return move, eval_score, telemetry
 
 
 # =====================================================================
