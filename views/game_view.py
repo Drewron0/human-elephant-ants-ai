@@ -83,7 +83,7 @@ class GameView(tk.Frame):
         right_panel = tk.Frame(self.paned, bg=THEME['surface'], bd=0, padx=16, pady=14)
         self.paned.add(right_panel, minsize=320, stretch="never")
 
-        # Player 2 Card
+        # Opponent Card
         p2_title = self.config.get('p2_name', 'Player 2')
         if self.config.get('mode') == 'PvE':
             p2_title += f" ({self.config.get('difficulty', 'Normal').capitalize()})"
@@ -97,7 +97,7 @@ class GameView(tk.Frame):
                                      font=(FONT_NAME, 12, "bold"), bg=THEME['surface_light'], fg=THEME['text'])
         self.lbl_p2_timer.pack(side=tk.RIGHT)
 
-        # Player 1 Card
+        # Primary Player Card
         p1_title = self.config.get('p1_name', 'Player 1')
 
         self.card_p1 = tk.Frame(right_panel, bg=THEME['surface_light'], padx=12, pady=8)
@@ -153,26 +153,19 @@ class GameView(tk.Frame):
         )
         self.btn_undo.grid(row=0, column=0, sticky="ew", padx=2, pady=3)
 
-        btn_save = ButtonSecondary(
-            btn_frame,
-            text=f"Save ({HOTKEYS['save']['key_str']})",
-            command=self._on_save
-        )
-        btn_save.grid(row=0, column=1, sticky="ew", padx=2, pady=3)
-
         btn_restart = ButtonSecondary(
             btn_frame,
             text=f"Restart ({HOTKEYS['restart']['key_str']})",
             command=self._on_restart
         )
-        btn_restart.grid(row=1, column=0, sticky="ew", padx=2, pady=3)
+        btn_restart.grid(row=0, column=1, sticky="ew", padx=2, pady=3)
 
         btn_surrender = ButtonDanger(
             btn_frame,
             text=f"Give Up ({HOTKEYS['surrender']['key_str']})",
             command=self._on_surrender
         )
-        btn_surrender.grid(row=1, column=1, sticky="ew", padx=2, pady=3)
+        btn_surrender.grid(row=1, column=0, columnspan=2, sticky="ew", padx=2, pady=3)
 
         btn_hub = ButtonSecondary(
             btn_frame,
@@ -198,7 +191,6 @@ class GameView(tk.Frame):
         self.app.bind(HOTKEYS['undo']['seq'], lambda e: self._on_undo())
         self.app.bind(HOTKEYS['restart']['seq'], lambda e: self._on_restart())
         self.app.bind(HOTKEYS['surrender']['seq'], lambda e: self._on_surrender())
-        self.app.bind(HOTKEYS['save']['seq'], lambda e: self._on_save())
 
     def _unbind_hotkeys(self):
         for h in HOTKEYS.values():
@@ -245,7 +237,7 @@ class GameView(tk.Frame):
 
         self.canvas.create_rectangle(0, 0, total_dim, total_dim, fill=THEME['surface'], outline='')
 
-        # Coordinates ONLY on BOTTOM (Letters A-I) and RIGHT (Numbers 9-1)
+        # Board edge coordinates
         for c in range(size):
             x = c * sq_size + sq_size // 2
             y = board_dim + 15
@@ -552,7 +544,7 @@ class GameView(tk.Frame):
         active_player = self.state.current_turn
 
         if self.config.get('mode') == 'PvE':
-            # Revert both AI and player moves, attribute undo to player (0)
+            # Revert moves and update history
             if self.state.undo(player_idx=0):
                 self.state.undo(player_idx=0)
         else:
@@ -626,68 +618,12 @@ class GameView(tk.Frame):
         ButtonSecondary(modal.footer, text="Cancel", command=modal.dismiss).pack(side=tk.LEFT)
         ButtonDanger(modal.footer, text="Surrender", command=confirm).pack(side=tk.RIGHT)
 
-    def _on_save(self):
-        if self.config.get('mode') != 'PvE':
-            modal = ThemedModal(self, "Save Game", min_width=360)
-            tk.Label(
-                modal.body,
-                text="Mid-game save slots are currently available for PvE matches.",
-                font=(FONT_NAME, 10),
-                bg=THEME['surface'],
-                fg=THEME['text'],
-                wraplength=320
-            ).pack(pady=12)
-            ButtonPrimary(modal.footer, text="Close", command=modal.dismiss).pack(side=tk.RIGHT)
-            return
-
-        modal = ThemedModal(self, "Save to Game Slot", min_width=460)
-        tk.Label(
-            modal.body,
-            text="Select a slot to save your current PvE match:",
-            font=(FONT_NAME, 9),
-            bg=THEME['surface'],
-            fg=THEME['text_muted']
-        ).pack(anchor="w", pady=(0, 6))
-
-        slots_box = tk.Frame(modal.body, bg=THEME['surface'])
-        slots_box.pack(fill=tk.BOTH, expand=True)
-
-        existing_saves = storage.get_saved_slots()
-
-        for slot_num in range(1, 6):
-            slot_id = f"slot_{slot_num}"
-            save_info = existing_saves.get(slot_id)
-            row = tk.Frame(slots_box, bg=THEME['surface_light'], padx=8, pady=4)
-            row.pack(fill=tk.X, pady=2)
-
-            if save_info:
-                label_txt = f"Slot {slot_num}: Turns: {save_info.get('state', {}).get('total_turns', 0)} ({save_info.get('timestamp')})"
-            else:
-                label_txt = f"Slot {slot_num}: [Empty Slot]"
-
-            tk.Label(row, text=label_txt, font=(FONT_NAME, 9), bg=THEME['surface_light'], fg=THEME['text']).pack(side=tk.LEFT)
-
-            def make_save_cmd(s_id=slot_id, s_num=slot_num):
-                payload = {
-                    'mode': self.config.get('mode'),
-                    'config': self.config,
-                    'p1_time': self.time_p1,
-                    'p2_time': self.time_p2,
-                    'state': self.state.to_dict()
-                }
-                storage.save_game_slot(s_id, f"Slot {s_num}", payload)
-                modal.dismiss()
-
-            ButtonPrimary(row, text="Save Here", command=make_save_cmd, pady=2, padx=8).pack(side=tk.RIGHT)
-
-        ButtonSecondary(modal.footer, text="Close", command=modal.dismiss).pack(side=tk.RIGHT)
-
     def _on_back_to_hub(self):
         if self.is_game_active and self.state.winner is None and self.state.total_turns > 0:
             modal = ThemedModal(self, "Return to Hub Confirmation", min_width=380)
             tk.Label(
                 modal.body,
-                text="Match is still in progress. Unsaved progress will be lost. Return to menu?",
+                text="Match is still in progress. Return to menu?",
                 font=(FONT_NAME, 10),
                 bg=THEME['surface'],
                 fg=THEME['text'],

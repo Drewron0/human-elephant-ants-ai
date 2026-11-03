@@ -78,7 +78,7 @@ class LeaderboardView(tk.Frame):
         )
         self.seg_sort.pack(side=tk.LEFT)
 
-        # Table Container
+        # Records Container
         self.table_card = tk.Frame(
             container,
             bg=THEME['surface'],

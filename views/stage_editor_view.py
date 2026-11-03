@@ -46,7 +46,7 @@ class StageEditorView(tk.Frame):
             self.placed_pieces[(2, 3)] = (1, 'E')
             self.placed_pieces[(1, 4)] = (1, 'H')
 
-        # Active tool: 'P0_H', 'P0_E', 'P0_A', 'P1_H', 'P1_E', 'P1_A', 'ERASER'
+        # Active palette selection tool
         self.active_tool: str = 'P1_E'
         self.last_verification: Optional[Dict[str, Any]] = None
         self.current_sq_size: int = 70

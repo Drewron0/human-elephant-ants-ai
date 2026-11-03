@@ -9,7 +9,7 @@ from ui_theme import (
 )
 from game_logic import GameState, Piece
 from puzzle_logic import PuzzleScenario, PuzzleSession, PRECONFIGURED_PUZZLES, generate_winnable_puzzle
-from ai_engine import get_defender_move, DEFAULT_PROPOSAL_WEIGHTS
+from ai_engine import get_defender_move, DEFAULT_EVALUATION_WEIGHTS
 import storage
 
 
@@ -132,7 +132,7 @@ class PuzzleGameView(tk.Frame):
         players_card.pack(fill=tk.X, pady=(0, 8))
 
         p_name = self.config.get('p1_name', 'Player 1')
-        ai_name = self.config.get('agent_model_name', 'Proposed: Optimized Agent (d=6)')
+        ai_name = self.config.get('agent_model_name', 'Optimized Agent (d=6)')
 
         row_p = tk.Frame(players_card, bg=THEME['surface_card'])
         row_p.pack(fill=tk.X)
@@ -394,7 +394,7 @@ class PuzzleGameView(tk.Frame):
     def _trigger_ai_move(self):
         agent_model = self.config.get('agent_model', 'proposed_d6')
         depth = self.config.get('search_depth', 6)
-        weights = self.config.get('weights', DEFAULT_PROPOSAL_WEIGHTS)
+        weights = self.config.get('weights', DEFAULT_EVALUATION_WEIGHTS)
 
         best_move, eval_score, telemetry = get_defender_move(
             state=self.state,

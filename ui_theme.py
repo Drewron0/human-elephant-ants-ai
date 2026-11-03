@@ -45,8 +45,7 @@ COLOR_PALETTES = {
 HOTKEYS = {
     'undo': {'seq': '<Control-z>', 'key_str': 'Ctrl+Z', 'label': 'Undo'},
     'restart': {'seq': '<Control-r>', 'key_str': 'Ctrl+R', 'label': 'Restart'},
-    'surrender': {'seq': '<Control-e>', 'key_str': 'Ctrl+E', 'label': 'Surrender'},
-    'save': {'seq': '<Control-s>', 'key_str': 'Ctrl+S', 'label': 'Save Slot'}
+    'surrender': {'seq': '<Control-e>', 'key_str': 'Ctrl+E', 'label': 'Surrender'}
 }
 
 

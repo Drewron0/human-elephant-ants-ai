@@ -45,7 +45,7 @@ class ConfigView(tk.Frame):
         lbl_font = (FONT_NAME, 9, "bold")
         entry_font = (FONT_NAME, 9)
 
-        # Player 1 Profile
+        # Primary Player Profile
         tk.Label(card, text="Player 1 Name:", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
         p1_box = tk.Frame(card, bg=THEME['surface'])
         p1_box.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)
@@ -122,7 +122,7 @@ class ConfigView(tk.Frame):
             cb_pve_engine = ttk.Combobox(
                 card,
                 textvariable=self.var_pve_engine,
-                values=["Standard Minimax", "Proposal: Non-Transitive Alpha-Beta (d=6)"],
+                values=["Standard Minimax", "Optimized: Non-Transitive Alpha-Beta (d=6)"],
                 state="readonly",
                 width=28,
                 font=entry_font
@@ -169,14 +169,14 @@ class ConfigView(tk.Frame):
         )
         chk_undo.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)
 
-        # Player 1 Color
+        # Primary Player Color
         row += 1
         tk.Label(card, text="Player 1 Color:", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)
         self.var_p1_color = tk.StringVar(value="Emerald Green")
         cb_p1 = ttk.Combobox(card, textvariable=self.var_p1_color, values=list(COLOR_PALETTES.keys()), state="readonly", width=16, font=entry_font)
         cb_p1.grid(row=row, column=1, sticky="w", padx=(12, 0), pady=6)
 
-        # Player 2 / AI Color
+        # Opponent Color
         row += 1
         p2_lbl = "AI Color:" if self.mode == 'PvE' else "Player 2 Color:"
         tk.Label(card, text=p2_lbl, font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)

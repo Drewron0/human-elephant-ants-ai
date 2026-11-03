@@ -10,7 +10,6 @@ from views.puzzle_select_view import PuzzleSelectView
 from views.stage_editor_view import StageEditorView
 from views.benchmark_view import BenchmarkView
 from views.leaderboard_view import LeaderboardView
-from views.saves_view import SavedGamesView
 from views.tutorial_view import TutorialView
 
 
@@ -32,7 +31,6 @@ class GameApp(tk.Tk):
         self.minsize(1050, 720)
         self.configure(bg=THEME['bg'])
 
-        # Initialize dark theme styling for ttk widgets
         setup_ttk_styles(self)
 
         self.container = tk.Frame(self, bg=THEME['bg'])
@@ -76,8 +74,7 @@ class GameApp(tk.Tk):
             self.current_view = BenchmarkView(self.container, self)
         elif view_name == 'leaderboard':
             self.current_view = LeaderboardView(self.container, self)
-        elif view_name == 'saves':
-            self.current_view = SavedGamesView(self.container, self)
+
         elif view_name == 'tutorial':
             self.current_view = TutorialView(self.container, self)
 
