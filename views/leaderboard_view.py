@@ -10,7 +10,6 @@ class LeaderboardView(tk.Frame):
         self.app = app
         self.sort_by = "turns"
         self.difficulty_category = "all"
-        self.current_tab = "pve"
         self._build_ui()
 
     def _build_ui(self):
@@ -30,18 +29,6 @@ class LeaderboardView(tk.Frame):
         ).pack(side=tk.LEFT)
 
         ButtonSecondary(header, text="Back to Hub", command=lambda: self.app.show_view('menu')).pack(side=tk.RIGHT)
-
-        # Tabs: PvE vs PvP
-        tabs_box = tk.Frame(container, bg=THEME['bg'])
-        tabs_box.pack(fill=tk.X, pady=(0, 8))
-
-        self.seg_tab = SegmentedControl(
-            tabs_box,
-            options=[("PvE Leaderboard", "pve"), ("PvP Player Records", "pvp")],
-            default_val="pve",
-            on_change=self._set_tab
-        )
-        self.seg_tab.pack(side=tk.LEFT)
 
         # PvE Filters Bar
         self.pve_toolbar = tk.Frame(
@@ -110,16 +97,6 @@ class LeaderboardView(tk.Frame):
 
         self._refresh_table()
 
-    def _set_tab(self, tab: str):
-        self.current_tab = tab
-        if tab == "pve":
-            self.pve_toolbar.pack(fill=tk.X, pady=(0, 8), before=self.table_card)
-            self.btn_clear_cat.pack(side=tk.LEFT, padx=(0, 6))
-        else:
-            self.pve_toolbar.pack_forget()
-            self.btn_clear_cat.pack_forget()
-        self._refresh_table()
-
     def _set_difficulty_filter(self, diff: str):
         self.difficulty_category = diff
         self._refresh_table()
@@ -132,65 +109,36 @@ class LeaderboardView(tk.Frame):
         for item in self.tree.get_children():
             self.tree.delete(item)
 
-        if self.current_tab == "pve":
-            columns = ("rank", "player", "difficulty", "turns", "time_left", "undos", "date")
-            self.tree["columns"] = columns
+        columns = ("rank", "player", "difficulty", "turns", "time_left", "undos", "date")
+        self.tree["columns"] = columns
 
-            self.tree.heading("rank", text="Rank")
-            self.tree.heading("player", text="Player Name")
-            self.tree.heading("difficulty", text="Difficulty")
-            self.tree.heading("turns", text="Turns")
-            self.tree.heading("time_left", text="Time Remaining")
-            self.tree.heading("undos", text="Undos")
-            self.tree.heading("date", text="Date Achieved")
+        self.tree.heading("rank", text="Rank")
+        self.tree.heading("player", text="Player Name")
+        self.tree.heading("difficulty", text="Difficulty")
+        self.tree.heading("turns", text="Turns")
+        self.tree.heading("time_left", text="Time Remaining")
+        self.tree.heading("undos", text="Undos")
+        self.tree.heading("date", text="Date Achieved")
 
-            # Generous column widths so text is never truncated
-            self.tree.column("rank", width=60, minwidth=50, anchor=tk.CENTER)
-            self.tree.column("player", width=200, minwidth=140, anchor=tk.W)
-            self.tree.column("difficulty", width=110, minwidth=90, anchor=tk.CENTER)
-            self.tree.column("turns", width=80, minwidth=70, anchor=tk.CENTER)
-            self.tree.column("time_left", width=130, minwidth=100, anchor=tk.CENTER)
-            self.tree.column("undos", width=80, minwidth=70, anchor=tk.CENTER)
-            self.tree.column("date", width=150, minwidth=120, anchor=tk.CENTER)
+        # Generous column widths so text is never truncated
+        self.tree.column("rank", width=60, minwidth=50, anchor=tk.CENTER)
+        self.tree.column("player", width=200, minwidth=140, anchor=tk.W)
+        self.tree.column("difficulty", width=110, minwidth=90, anchor=tk.CENTER)
+        self.tree.column("turns", width=80, minwidth=70, anchor=tk.CENTER)
+        self.tree.column("time_left", width=130, minwidth=100, anchor=tk.CENTER)
+        self.tree.column("undos", width=80, minwidth=70, anchor=tk.CENTER)
+        self.tree.column("date", width=150, minwidth=120, anchor=tk.CENTER)
 
-            records = storage.get_pve_leaderboard(sort_by=self.sort_by, difficulty=self.difficulty_category)
-            for i, r in enumerate(records):
-                t_val = r.get('time_left', 0)
-                t_str = f"{t_val // 60}:{t_val % 60:02d}" if t_val >= 0 else "Unlimited"
-                uname = r['username']
-                self.tree.insert("", tk.END, iid=r['id'], values=(
-                    i + 1, uname, r.get('difficulty', 'Normal'),
-                    r['turns'], t_str, r['undos'], r['timestamp']
-                ))
+        records = storage.get_pve_leaderboard(sort_by=self.sort_by, difficulty=self.difficulty_category)
+        for i, r in enumerate(records):
+            t_val = r.get('time_left', 0)
+            t_str = f"{t_val // 60}:{t_val % 60:02d}" if t_val >= 0 else "Unlimited"
+            uname = r['username']
+            self.tree.insert("", tk.END, iid=r['id'], values=(
+                i + 1, uname, r.get('difficulty', 'Normal'),
+                r['turns'], t_str, r['undos'], r['timestamp']
+            ))
 
-        else:
-            columns = ("player", "wins", "losses", "undos", "rate", "last_played")
-            self.tree["columns"] = columns
-
-            self.tree.heading("player", text="Player Profile")
-            self.tree.heading("wins", text="Wins")
-            self.tree.heading("losses", text="Losses")
-            self.tree.heading("undos", text="Total Undos")
-            self.tree.heading("rate", text="Win Rate")
-            self.tree.heading("last_played", text="Last Match")
-
-            self.tree.column("player", width=220, minwidth=160, anchor=tk.W)
-            self.tree.column("wins", width=90, minwidth=70, anchor=tk.CENTER)
-            self.tree.column("losses", width=90, minwidth=70, anchor=tk.CENTER)
-            self.tree.column("undos", width=100, minwidth=80, anchor=tk.CENTER)
-            self.tree.column("rate", width=100, minwidth=80, anchor=tk.CENTER)
-            self.tree.column("last_played", width=160, minwidth=120, anchor=tk.CENTER)
-
-            pvp_data = storage.get_pvp_stats()
-            for uname, stats in pvp_data.items():
-                w = stats.get('wins', 0)
-                l = stats.get('losses', 0)
-                u = stats.get('undos', 0)
-                total = w + l
-                rate_str = f"{(w / total * 100):.1f}%" if total > 0 else "N/A"
-                self.tree.insert("", tk.END, iid=uname, values=(
-                    uname, w, l, u, rate_str, stats.get('last_played', '')
-                ))
 
     def _delete_selected(self):
         selected = self.tree.selection()
@@ -198,15 +146,10 @@ class LeaderboardView(tk.Frame):
             return
 
         sel_id = selected[0]
-        if self.current_tab == "pve":
-            storage.delete_pve_score(sel_id)
-        else:
-            storage.delete_pvp_player(sel_id)
+        storage.delete_pve_score(sel_id)
         self._refresh_table()
 
     def _clear_category(self):
-        if self.current_tab != "pve":
-            return
         cat_name = self.difficulty_category.capitalize() if self.difficulty_category != "all" else "All Difficulties"
         modal = ThemedModal(self, "Clear Category Confirmation", min_width=380)
         tk.Label(
@@ -230,7 +173,7 @@ class LeaderboardView(tk.Frame):
         modal = ThemedModal(self, "Clear All Records Confirmation", min_width=380)
         tk.Label(
             modal.body,
-            text=f"Clear all {'PvE Leaderboard' if self.current_tab == 'pve' else 'PvP'} records? This cannot be undone.",
+            text="Clear all AI practice records? This cannot be undone.",
             font=(FONT_NAME, 10),
             bg=THEME['surface'],
             fg=THEME['text'],
@@ -239,10 +182,7 @@ class LeaderboardView(tk.Frame):
 
         def confirm():
             modal.dismiss()
-            if self.current_tab == "pve":
-                storage.clear_pve_leaderboard("all")
-            else:
-                storage.clear_pvp_stats()
+            storage.clear_pve_leaderboard("all")
             self._refresh_table()
 
         ButtonSecondary(modal.footer, text="Cancel", command=modal.dismiss).pack(side=tk.LEFT)

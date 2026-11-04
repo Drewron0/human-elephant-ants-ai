@@ -21,6 +21,13 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 
 ## 2. Core Features
 
+### Four-minute AI competition
+- Choose **AI Competition (4 Minutes)** from the main menu. Every player faces the same selected challenge and optimized depth-6 AI.
+- One attempt per player per challenge in a round. The four-minute wall clock includes AI search and response time. Undo and reset are unavailable; leaving a game records a zero-point forfeit.
+- A win before the deadline scores `max(0, 1000 - 10 * player_moves)`. A loss or timeout scores zero. Higher scores rank first; equal scores use faster completion. Failed attempts do not receive a winning rank.
+- The competition screen shows standings for each of three fixed challenges. **Clear This Round** starts a new contest for the selected challenge after confirmation. Practice records and other challenges are preserved.
+- Direct PvP and networking have been removed. AI practice, puzzle practice, the stage editor and the benchmark lab remain available.
+
 ### Modern Clean Dark Design System
 - Built with restrained typography, high-contrast dark system palette (`#121214`, `#1C1C1E`, `#2C2C2E`), and subtle elevation.
 - Fluid, interactive splitters (`tk.PanedWindow`) allowing users to resize sidebars while the board dynamically scales to fit the container.
@@ -44,10 +51,10 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 ```text
 AFL2/
 |-- ai_engine.py             # Minimax search, Alpha-Beta pruning, evaluation function
+|-- competition.py           # Four-minute clock and competition scoring rules
 |-- game_logic.py            # Board representation, state transitions, cyclic captures
 |-- gui.py                   # Master Tkinter application controller
 |-- main.py                  # Application entry point
-|-- network.py               # Local socket multiplayer server/client
 |-- puzzle_logic.py          # 10 6x6 stages, BFS safe path solver, random generator
 |-- run_benchmark.py         # Automated CLI benchmark runner for research metrics
 |-- storage.py               # JSON persistence for profiles, leaderboards, and custom stages
@@ -57,6 +64,7 @@ AFL2/
 |   |-- test_game.py         # Unit test suite covering mechanics, AI, and CRUD
 `-- views/
     |-- benchmark_view.py    # GUI benchmarking and simulation lab
+    |-- competition_view.py  # Fixed challenges, player entry and standings
     |-- config_view.py       # Game setup and player preferences
     |-- game_view.py         # Standard match view with resizable paned layout
     |-- leaderboard_view.py  # Global and per-stage records
@@ -73,7 +81,7 @@ AFL2/
 
 ### Requirements
 - Python 3.8+ (Python 3.10+ recommended)
-- Standard library dependencies (`tkinter`, `json`, `math`, `socket`, `threading`, `unittest`)
+- Standard library dependencies (`tkinter`, `json`, `math`, `threading`, `unittest`)
 
 ### Setup Instructions
 1. Clone the repository:

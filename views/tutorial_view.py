@@ -82,9 +82,9 @@ class TutorialView(tk.Frame):
             "   Default: 1,000 games per combination on certified random 11x11 10-step race puzzles.\n"
             "   Records turn latency, actual depth, timeouts, pruning efficiency, delay margin, and neutralization rate.\n\n"
             "6. Match Clock and Hotkeys:\n"
-            "   Each side has an active countdown timer during their turn (PvE/PvP).\n"
-            "   Ctrl + Z: Undo move\n"
-            "   Ctrl + R: Restart / Reset puzzle attempt (requires confirmation)\n"
+            "   AI competition has a 4-minute total clock, fixed AI and no undo/reset.\n"
+            "   Practice only: Ctrl + Z undoes a move; Ctrl + R restarts a puzzle.\n"
+            "   Competition wins score 1000 - 10 * moves; losses and timeouts score 0.\n"
             "   Ctrl + E: Surrender / Concede match\n"
             "   Ctrl + S: Save mid-game state to a save slot"
         )

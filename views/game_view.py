@@ -8,14 +8,13 @@ from ui_theme import (
 from game_logic import GameState, Piece, TARGET_CORNERS
 from ai_engine import get_ai_move_with_delay
 import storage
-from network import NetworkManager
 
 
 class GameView(tk.Frame):
     def __init__(self, parent, app, config: Dict[str, Any], saved_state: Optional[Dict[str, Any]] = None):
         super().__init__(parent, bg=THEME['bg'])
         self.app = app
-        self.config = config
+        self.config = dict(config, mode='PvE')
 
         self.state = GameState.from_dict(saved_state['state']) if saved_state else GameState()
 
@@ -26,7 +25,6 @@ class GameView(tk.Frame):
         self.selected_sq: Optional[Tuple[int, int]] = None
         self.valid_targets: List[Tuple[int, int]] = []
         self.last_move: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
-        self.network_mgr: Optional[NetworkManager] = None
         self.timer_id: Optional[str] = None
         self.ai_timer_id: Optional[str] = None
         self.is_game_active = True
@@ -38,9 +36,6 @@ class GameView(tk.Frame):
         self._build_ui()
         self._bind_hotkeys()
         self._start_timer()
-
-        if self.config.get('mode') == 'PvP' and self.config.get('pvp_type') == 'Online':
-            self._init_network()
 
     def _build_ui(self):
         # Top objective reminder bar
@@ -327,11 +322,6 @@ class GameView(tk.Frame):
         if self.config.get('mode') == 'PvE' and self.state.current_turn == 1:
             return
 
-        if self.config.get('mode') == 'PvP' and self.config.get('pvp_type') == 'Online':
-            my_role = 0 if self.config.get('is_host') else 1
-            if self.state.current_turn != my_role:
-                return
-
         sq_size = self.current_sq_size
         c = event.x // sq_size
         r = event.y // sq_size
@@ -360,7 +350,7 @@ class GameView(tk.Frame):
                 self.valid_targets = [m[1] for m in self.state.get_valid_moves_for_piece(r, c)]
                 self._draw_board()
 
-    def _execute_move(self, start: Tuple[int, int], end: Tuple[int, int], from_network: bool = False):
+    def _execute_move(self, start: Tuple[int, int], end: Tuple[int, int]):
         move = self.state.make_move(start, end)
         if not move:
             return
@@ -368,9 +358,6 @@ class GameView(tk.Frame):
         self.last_move = (start, end)
         self.selected_sq = None
         self.valid_targets = []
-
-        if self.network_mgr and not from_network:
-            self.network_mgr.send_move(start, end)
 
         self._update_ui_state()
         self.update_idletasks()
@@ -382,6 +369,7 @@ class GameView(tk.Frame):
         # PVE: AI delay calculation so AI clock ticks and human can win via time
         if self.config.get('mode') == 'PvE' and self.state.current_turn == 1 and self.is_game_active:
             def _schedule_pve_ai():
+                self.ai_timer_id = None
                 if not self.is_game_active or self.state.current_turn != 1:
                     return
                 diff = self.config.get('difficulty', 'normal')
@@ -390,7 +378,7 @@ class GameView(tk.Frame):
                     delay_ms = int(delay_sec * 1000)
                     self.ai_timer_id = self.after(delay_ms, lambda: self._execute_move(ai_move[0], ai_move[1]))
 
-            self.after(40, _schedule_pve_ai)
+            self.ai_timer_id = self.after(40, _schedule_pve_ai)
 
     def _update_ui_state(self):
         self._draw_board()
@@ -400,14 +388,7 @@ class GameView(tk.Frame):
 
         self.lbl_turn.config(text=f"Turn: {p_name}", fg=color)
 
-        if self.config.get('mode') == 'PvP':
-            self.lbl_stats.config(
-                text=f"Turns: {self.state.total_turns} | P1 Undos: {self.state.undos_p1} | P2 Undos: {self.state.undos_p2}"
-            )
-        else:
-            self.lbl_stats.config(
-                text=f"Turns: {self.state.total_turns} | Undos: {self.state.undos_p1}"
-            )
+        self.lbl_stats.config(text=f"Turns: {self.state.total_turns} | Undos: {self.state.undos_p1}")
 
         self.list_notation.delete(0, tk.END)
         for i, n in enumerate(self.state.notation):
@@ -468,19 +449,11 @@ class GameView(tk.Frame):
         winner_name = self.config.get('p1_name') if winner == 0 else self.config.get('p2_name')
         win_color = self.config.get('p1_color') if winner == 0 else self.config.get('p2_color')
 
-        # Record Score into Storage
-        if self.config.get('mode') == 'PvE':
-            if winner == 0:
-                storage.save_pve_score(
-                    username=self.config.get('p1_name', 'Player'),
-                    turns=self.state.total_turns,
-                    time_left=max(0, self.time_p1),
-                    undos=self.state.undos_p1,
-                    difficulty=self.config.get('difficulty', 'normal')
-                )
-        else:
-            storage.update_pvp_stats(self.config.get('p1_name'), won=(winner == 0), undos=self.state.undos_p1)
-            storage.update_pvp_stats(self.config.get('p2_name'), won=(winner == 1), undos=self.state.undos_p2)
+        if winner == 0:
+            storage.save_pve_score(
+                username=self.config.get('p1_name', 'Player'),
+                turns=self.state.total_turns, time_left=max(0, self.time_p1),
+                undos=self.state.undos_p1, difficulty=self.config.get('difficulty', 'normal'))
 
         # Game Over Modal (Self-sizing, never cutoff)
         modal = ThemedModal(self, "Match Finished", min_width=440)
@@ -504,10 +477,7 @@ class GameView(tk.Frame):
         info_box = tk.Frame(modal.body, bg=THEME['surface_light'], padx=14, pady=8)
         info_box.pack(fill=tk.X, pady=4)
 
-        if self.config.get('mode') == 'PvP':
-            stats_str = f"Turns: {self.state.total_turns} | P1 Undos: {self.state.undos_p1} | P2 Undos: {self.state.undos_p2}"
-        else:
-            stats_str = f"Turns: {self.state.total_turns} | Undos: {self.state.undos_p1}"
+        stats_str = f"Turns: {self.state.total_turns} | Undos: {self.state.undos_p1}"
 
         tk.Label(info_box, text=stats_str, font=(FONT_NAME, 9), bg=THEME['surface_light'], fg=THEME['text']).pack()
 
@@ -538,18 +508,11 @@ class GameView(tk.Frame):
         if not self.config.get('undo_enabled') or not self.is_game_active:
             return
 
-        if self.config.get('mode') == 'PvP' and self.config.get('pvp_type') == 'Online':
-            return
-
-        active_player = self.state.current_turn
-
-        if self.config.get('mode') == 'PvE':
-            # Revert moves and update history
-            if self.state.undo(player_idx=0):
-                self.state.undo(player_idx=0)
-        else:
-            # Local PvP: attribute undo to active player
-            self.state.undo(player_idx=active_player)
+        if self.ai_timer_id:
+            self.after_cancel(self.ai_timer_id)
+            self.ai_timer_id = None
+        if self.state.undo(player_idx=0) and self.state.current_turn == 1:
+            self.state.undo(player_idx=0)
 
         self.selected_sq = None
         self.valid_targets = []
@@ -573,8 +536,6 @@ class GameView(tk.Frame):
 
         def confirm():
             modal.dismiss()
-            if self.network_mgr:
-                self.network_mgr.send_restart()
             self._restart_match()
 
         ButtonSecondary(modal.footer, text="Cancel", command=modal.dismiss).pack(side=tk.LEFT)
@@ -610,9 +571,7 @@ class GameView(tk.Frame):
 
         def confirm():
             modal.dismiss()
-            if self.network_mgr:
-                self.network_mgr.send_surrender()
-            winner = 1 - self.state.current_turn
+            winner = 1
             self._handle_game_over(winner, "Surrender")
 
         ButtonSecondary(modal.footer, text="Cancel", command=modal.dismiss).pack(side=tk.LEFT)
@@ -670,30 +629,6 @@ class GameView(tk.Frame):
 
         ButtonPrimary(modal.footer, text="Close", command=modal.dismiss).pack(side=tk.RIGHT)
 
-    def _init_network(self):
-        is_host = self.config.get('is_host', True)
-        ip = self.config.get('ip', '127.0.0.1')
-        port = self.config.get('port', 5555)
-        local_name = self.config.get('p1_name', 'Player 1')
-
-        self.network_mgr = NetworkManager(
-            is_host=is_host,
-            ip=ip,
-            port=port,
-            local_name=local_name,
-            on_connect=None,
-            on_opponent_name=lambda name: self.after(0, lambda: self._on_opponent_named(name)),
-            on_move=lambda s, e: self.after(0, lambda: self._execute_move((s[0], s[1]), (e[0], e[1]), from_network=True)),
-            on_restart=lambda: self.after(0, self._restart_match),
-            on_surrender=lambda: self.after(0, lambda: self._handle_game_over(0 if not is_host else 1, "Opponent Surrendered")),
-            on_disconnect=None
-        )
-        self.network_mgr.start()
-
-    def _on_opponent_named(self, name: str):
-        self.config['p2_name'] = name
-        self.lbl_p2_name.config(text=name)
-
     def _cleanup(self):
         if self._resize_job is not None:
             try:
@@ -703,6 +638,3 @@ class GameView(tk.Frame):
             self._resize_job = None
         self._stop_timer()
         self._unbind_hotkeys()
-        if self.network_mgr:
-            self.network_mgr.close()
-            self.network_mgr = None

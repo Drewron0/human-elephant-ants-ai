@@ -3,6 +3,7 @@ import os
 import uuid
 from datetime import datetime
 from typing import Dict, List, Any, Optional
+from competition import calculate_score, TIME_LIMIT
 
 DB_FILE = 'leaderboard.json'
 SAVES_FILE = 'saved_games.json'
@@ -162,39 +163,37 @@ def clear_stage_leaderboard(stage_id: Optional[str] = None) -> None:
     _save_json(DB_FILE, db)
 
 
-# PvP Stats Management
+# Competition rounds (stored separately from practice records).
 
-def update_pvp_stats(username: str, won: bool, undos: int = 0) -> None:
-    db = _load_json(DB_FILE, {"pve": [], "pvp": {}, "stages": {}})
-    username = username.strip() or "Player"
-    stats = db.setdefault("pvp", {}).get(username, {"wins": 0, "losses": 0, "undos": 0, "last_played": ""})
-    if won:
-        stats["wins"] += 1
-    else:
-        stats["losses"] += 1
-    stats["undos"] = stats.get("undos", 0) + undos
-    stats["last_played"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-    db["pvp"][username] = stats
+
+def get_competition_leaderboard(key: str) -> List[Dict[str, Any]]:
+    db = _load_json(DB_FILE, {})
+    records = db.get('competition', {}).get(key, [])
+    return sorted(records, key=lambda record: (-record['score'], record['elapsed_seconds']))
+
+
+def save_competition_score(key: str, username: str, steps: int, elapsed_seconds: float,
+                           solved: bool, reason: str = '') -> str:
+    username = username.strip()
+    if not username or steps < 0 or elapsed_seconds < 0:
+        raise ValueError('Invalid competition result')
+    db = _load_json(DB_FILE, {})
+    records = db.setdefault('competition', {}).setdefault(key, [])
+    if any(record['username'].casefold() == username.casefold() for record in records):
+        raise ValueError('This player has already played this challenge in the current round')
+    solved = bool(solved and elapsed_seconds < TIME_LIMIT)
+    record_id = str(uuid.uuid4())[:8]
+    records.append(dict(id=record_id, username=username, steps=steps,
+                        elapsed_seconds=elapsed_seconds, solved=solved, reason=reason,
+                        score=calculate_score(solved, steps, elapsed_seconds)))
     _save_json(DB_FILE, db)
+    save_last_username(username)
+    return record_id
 
 
-def get_pvp_stats() -> Dict[str, Dict[str, Any]]:
-    db = _load_json(DB_FILE, {"pve": [], "pvp": {}, "stages": {}})
-    return db.get("pvp", {})
-
-
-def delete_pvp_player(username: str) -> bool:
-    db = _load_json(DB_FILE, {"pve": [], "pvp": {}, "stages": {}})
-    if username in db.get("pvp", {}):
-        del db["pvp"][username]
-        _save_json(DB_FILE, db)
-        return True
-    return False
-
-
-def clear_pvp_stats() -> None:
-    db = _load_json(DB_FILE, {"pve": [], "pvp": {}, "stages": {}})
-    db["pvp"] = {}
+def clear_competition_round(key: str) -> None:
+    db = _load_json(DB_FILE, {})
+    db.setdefault('competition', {}).pop(key, None)
     _save_json(DB_FILE, db)
 
 

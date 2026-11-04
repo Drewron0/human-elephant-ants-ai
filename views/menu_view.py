@@ -6,7 +6,7 @@ from ui_theme import THEME, FONT_NAME, ButtonPrimary, ButtonSecondary, ButtonDan
 class MainMenuView(tk.Frame):
     """
     Main Navigation Hub.
-    Provides direct access to tactical puzzles, PvE and PvP matches,
+    Provides direct access to AI competition, practice matches,
     benchmarking lab, and records without redundant submenus.
     """
     def __init__(self, parent, app):
@@ -69,7 +69,14 @@ class MainMenuView(tk.Frame):
 
             ButtonPrimary(
                 card,
-                text="Tactical Puzzle Mode",
+                text="AI Competition (4 Minutes)",
+                command=lambda: self.app.show_view('competition'),
+                width=w
+            ).pack(pady=4)
+
+            ButtonSecondary(
+                card,
+                text="Puzzle Practice",
                 command=lambda: self.app.show_view('puzzle_select'),
                 width=w
             ).pack(pady=4)
@@ -78,13 +85,6 @@ class MainMenuView(tk.Frame):
                 card,
                 text="Play vs AI (PvE)",
                 command=lambda: self.app.open_config('PvE'),
-                width=w
-            ).pack(pady=4)
-
-            ButtonSecondary(
-                card,
-                text="Play vs Player (PvP)",
-                command=lambda: self.app.open_config('PvP'),
                 width=w
             ).pack(pady=4)
 
