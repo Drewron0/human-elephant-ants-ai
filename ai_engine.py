@@ -11,6 +11,14 @@ DEFAULT_EVALUATION_WEIGHTS = {"wm": 1.0, "wc": 1.5, "wp": 0.5, "wt": 2.5}
 DEFAULT_PROPOSAL_WEIGHTS = DEFAULT_EVALUATION_WEIGHTS
 
 
+# chebyshev : jarak paling dekat tanpa memperhitungkan rintangan
+# digunakna saat
+# 1. evaluate_board()
+# 2. order_moves()
+# 3. order_moves_mvv_lva()
+# 4. evaluate_non_transitive()
+
+
 def chebyshev_distance(p1: Tuple[int, int], p2: Tuple[int, int]) -> int:
     return max(abs(p1[0] - p2[0]), abs(p1[1] - p2[1]))
 
@@ -153,6 +161,9 @@ def evaluate_non_transitive(
 # =====================================================================
 
 
+# untuk mengurutkan langkah yang akan diambil lebih dulu
+# setiap piece dihitung nilainya : berdasarkan
+# nilai = 10 * (jumlah_mangsa + 1) / (jumlah_predator + 1)
 def order_moves_mvv_lva(
     moves: List[Tuple[Tuple[int, int], Tuple[int, int]]],
     state: GameState,
@@ -469,6 +480,9 @@ def get_defender_move(
 # =====================================================================
 
 
+# menentukan nilai papan
+# skor = nilai_AI - nilai_player + threat_differential
+# ini menggunakan PIECE_VALUE sehingga perhitungan nya masih statis
 def evaluate_board(state: GameState, player: int, difficulty: str = "normal") -> float:
     opponent = 1 - player
     if state.winner == player:
