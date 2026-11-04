@@ -1,6 +1,7 @@
 # Chess-Sut AI Agent Dependencies
-# Core functionality relies entirely on Python standard library (tkinter, json, math, socket, etc.)
+# Piece artwork uses Pillow for transparent cropping and smooth resizing.
 # Python >= 3.8 recommended
+Pillow>=10.0.0
 
 # Optional testing & linting tools
 pytest>=8.0.0

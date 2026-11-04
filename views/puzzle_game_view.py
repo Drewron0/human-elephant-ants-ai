@@ -7,7 +7,7 @@ from queue import Queue, Empty
 
 from ui_theme import (
     THEME, FONT_NAME, HOTKEYS, ButtonPrimary, ButtonSecondary, ButtonDanger,
-    ThemedModal, draw_star, bind_mousewheel
+    ThemedModal, draw_star, bind_mousewheel, draw_piece_image
 )
 from game_logic import GameState, Piece
 from puzzle_logic import PuzzleSession, get_all_puzzles, make_puzzle_move
@@ -350,8 +350,7 @@ class PuzzleGameView(tk.Frame):
         self.canvas.create_oval(x0 + pad, y0 + pad, x1 - pad, y1 - pad, fill=color, outline='#FFFFFF', width=2)
         cx = (x0 + x1) // 2
         cy = (y0 + y1) // 2
-        font_sz = max(8, sq_size // 4)
-        self.canvas.create_text(cx, cy, text=piece.p_type, font=(FONT_NAME, font_sz, "bold"), fill='#FFFFFF')
+        draw_piece_image(self.canvas, cx, cy, piece.p_type, max(1, sq_size - 2 * pad - 4))
 
     def _on_board_click(self, event):
         if not self.is_game_active or self.session.is_neutralized or self.state.winner is not None or self.state.current_turn != 0:

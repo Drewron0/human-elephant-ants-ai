@@ -3,7 +3,7 @@ from tkinter import ttk
 from typing import Dict, Any, Optional, Tuple, List
 from ui_theme import (
     THEME, FONT_NAME, HOTKEYS, ButtonPrimary, ButtonSecondary, ButtonDanger,
-    ThemedModal, draw_star, bind_mousewheel
+    ThemedModal, draw_star, bind_mousewheel, draw_piece_image
 )
 from game_logic import GameState, Piece, TARGET_CORNERS
 from ai_engine import get_ai_move_with_delay
@@ -295,7 +295,7 @@ class GameView(tk.Frame):
                     cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
                     self.canvas.create_oval(cx - 7, cy - 7, cx + 7, cy + 7, fill=THEME['move_dot'], outline='')
 
-                # DRAW PIECE (LETTER ONLY, NO WORDS)
+                # Draw character over the player-colored piece.
                 piece = self.state.board[r][c]
                 if piece:
                     self._draw_piece(x0, y0, x1, y1, piece)
@@ -309,11 +309,9 @@ class GameView(tk.Frame):
         # Main piece circle
         self.canvas.create_oval(x0 + pad, y0 + pad, x1 - pad, y1 - pad, fill=color, outline='#FFFFFF', width=2)
 
-        # Monogram letter ONLY (NO FULL WORDS)
         cx = (x0 + x1) // 2
         cy = (y0 + y1) // 2
-        font_sz = max(10, int(sq_size * 0.22))
-        self.canvas.create_text(cx, cy, text=piece.p_type, font=(FONT_NAME, font_sz, "bold"), fill='#FFFFFF')
+        draw_piece_image(self.canvas, cx, cy, piece.p_type, max(1, sq_size - 2 * pad - 4))
 
     def _on_board_click(self, event):
         if not self.is_game_active or self.state.winner is not None:

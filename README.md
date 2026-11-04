@@ -74,6 +74,7 @@ AFL2/
 ### Requirements
 - Python 3.8+ (Python 3.10+ recommended)
 - Standard library dependencies (`tkinter`, `json`, `math`, `threading`, `unittest`)
+- Pillow for the Human, Elephant and Ant artwork on boards and previews
 
 ### Setup Instructions
 1. Clone the repository:
@@ -89,7 +90,7 @@ AFL2/
    # macOS / Linux
    source venv/bin/activate
    ```
-3. Install optional dependencies:
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```

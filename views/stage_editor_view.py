@@ -4,7 +4,7 @@ from typing import Dict, Any, Tuple, Optional
 
 from ui_theme import (
     THEME, FONT_NAME, ButtonPrimary, ButtonSecondary, ButtonDanger,
-    ThemedModal, draw_star
+    ThemedModal, draw_star, draw_piece_image
 )
 import storage
 
@@ -275,7 +275,8 @@ class StageEditorView(tk.Frame):
                     color = '#30D158' if owner == 0 else '#FF453A'
                     pad = max(4, sq_size // 8)
                     self.canvas.create_oval(x0 + pad, y0 + pad, x1 - pad, y1 - pad, fill=color, outline='#FFFFFF', width=2)
-                    self.canvas.create_text((x0 + x1) // 2, (y0 + y1) // 2, text=pt, font=(FONT_NAME, max(9, sq_size // 4), "bold"), fill='#FFFFFF')
+                    draw_piece_image(self.canvas, (x0 + x1) // 2, (y0 + y1) // 2,
+                                     pt, max(1, sq_size - 2 * pad - 4))
 
     def _on_canvas_right_click(self, event):
         size = self.board_size
