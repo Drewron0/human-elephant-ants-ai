@@ -1,12 +1,12 @@
 import tkinter as tk
 from typing import Optional
-from ui_theme import THEME, FONT_NAME, ButtonPrimary, ButtonSecondary, ButtonDanger
+from ui_theme import THEME, FONT_NAME, ButtonSecondary, ButtonDanger
 
 
 class MainMenuView(tk.Frame):
     """
     Main Navigation Hub.
-    Provides direct access to AI competition, practice matches,
+    Provides direct access to practice matches,
     benchmarking lab, and records without redundant submenus.
     """
     def __init__(self, parent, app):
@@ -66,13 +66,6 @@ class MainMenuView(tk.Frame):
                 bg=THEME['surface'],
                 fg=THEME['text_muted']
             ).pack(pady=(0, 10))
-
-            ButtonPrimary(
-                card,
-                text="AI Competition (4 Minutes)",
-                command=lambda: self.app.show_view('competition'),
-                width=w
-            ).pack(pady=4)
 
             ButtonSecondary(
                 card,

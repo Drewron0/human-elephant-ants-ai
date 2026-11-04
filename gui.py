@@ -11,7 +11,6 @@ from views.stage_editor_view import StageEditorView
 from views.benchmark_view import BenchmarkView
 from views.leaderboard_view import LeaderboardView
 from views.tutorial_view import TutorialView
-from views.competition_view import CompetitionView
 
 
 class GameApp(tk.Tk):
@@ -54,8 +53,6 @@ class GameApp(tk.Tk):
 
         if view_name == 'menu':
             self.current_view = MainMenuView(self.container, self)
-        elif view_name == 'competition':
-            self.current_view = CompetitionView(self.container, self)
         elif view_name == 'puzzle_select':
             self.current_view = PuzzleSelectView(self.container, self)
         elif view_name == 'stage_editor':

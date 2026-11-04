@@ -82,10 +82,8 @@ class TutorialView(tk.Frame):
             "   and Baseline 1 (Random Agent) against scripted players (Shortest-Path, Sub-Optimal, Random).\n"
             "   Default: 1,000 games per combination on certified random 11x11 10-step race puzzles.\n"
             "   Records turn latency, actual depth, timeouts, pruning efficiency, delay margin, and neutralization rate.\n\n"
-            "6. Match Clock and Hotkeys:\n"
-            "   AI competition has a 4-minute total clock, fixed AI and no undo/reset.\n"
-            "   Practice only: Ctrl + Z undoes a move; Ctrl + R restarts a puzzle.\n"
-            "   Competition wins score 1000 - 10 * moves; losses and timeouts score 0.\n"
+            "6. Hotkeys:\n"
+            "   Ctrl + Z undoes a move; Ctrl + R restarts a puzzle.\n"
             "   Ctrl + E: Surrender / Concede match\n"
             "   Ctrl + S: Save mid-game state to a save slot"
         )

@@ -2,8 +2,6 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Dict, Any, Optional, Tuple, List
 import time
-import math
-from competition import CompetitionAttempt, TIME_LIMIT, AI_MODEL, SEARCH_DEPTH, challenge_key
 
 from ui_theme import (
     THEME, FONT_NAME, HOTKEYS, ButtonPrimary, ButtonSecondary, ButtonDanger,
@@ -25,15 +23,6 @@ class PuzzleGameView(tk.Frame):
         super().__init__(parent, bg=THEME['bg'])
         self.app = app
         self.config = dict(config)
-        self.is_competition = bool(config.get('competition'))
-        self.competition_attempt = None
-        self.competition_timer_id = None
-        self.competition_result = None
-        if self.is_competition:
-            self.config.update(agent_model=AI_MODEL, search_depth=SEARCH_DEPTH,
-                               agent_model_name='Competition AI (Depth 6)',
-                               undo_enabled=False, show_metrics=False,
-                               weights=DEFAULT_EVALUATION_WEIGHTS)
 
         # Initialize Scenario & Session
         scenario_key = config.get('puzzle_scenario', 'stage_6x6_01')
@@ -63,9 +52,6 @@ class PuzzleGameView(tk.Frame):
 
         self._build_ui()
         self._bind_hotkeys()
-        if self.is_competition:
-            self.competition_attempt = CompetitionAttempt()
-            self._tick_competition()
 
     def _build_ui(self):
         # Top Bar
@@ -91,7 +77,7 @@ class PuzzleGameView(tk.Frame):
             fg=THEME['text_muted']
         ).pack(side=tk.LEFT, padx=(8, 0))
 
-        ButtonSecondary(top_bar, text="Leave Competition" if self.is_competition else "Back to Stages",
+        ButtonSecondary(top_bar, text="Back to Stages",
                         command=self._on_back_to_select).pack(side=tk.RIGHT, padx=12, pady=6)
         ButtonSecondary(top_bar, text="Rules", command=self._show_rules_modal).pack(side=tk.RIGHT, padx=(0, 6), pady=6)
 
@@ -180,10 +166,6 @@ class PuzzleGameView(tk.Frame):
 
         self.lbl_status = tk.Label(st_row, text="ON TRACK", font=(FONT_NAME, 8, "bold"), bg=THEME['surface_light'], fg=THEME['accent'])
         self.lbl_status.pack(side=tk.RIGHT)
-        if self.is_competition:
-            self.lbl_competition_clock = tk.Label(strat_card, text='Time remaining: 4:00',
-                font=(FONT_NAME, 16, 'bold'), bg=THEME['surface_light'], fg=THEME['accent'])
-            self.lbl_competition_clock.pack(anchor='w', pady=(8, 0))
 
         # AI Search Metrics Box (Only shown if show_metrics is enabled)
         if self.show_metrics:
@@ -229,15 +211,9 @@ class PuzzleGameView(tk.Frame):
         self.btn_undo = ButtonSecondary(btn_frame, text=f"Undo ({HOTKEYS['undo']['key_str']})", command=self._on_undo)
         self.btn_undo.grid(row=0, column=0, sticky="ew", padx=2, pady=2)
 
-        btn_reset = ButtonSecondary(btn_frame, text=f"Reset ({HOTKEYS['restart']['key_str']})", command=self._on_reset_attempt)
-        btn_reset.grid(row=0, column=1, sticky="ew", padx=2, pady=2)
-        if self.is_competition:
-            self.btn_undo.grid_remove()
-            btn_reset.grid_remove()
-            tk.Label(btn_frame, text='Competition: no undo or reset', bg=THEME['surface'],
-                     fg=THEME['text_muted']).grid(row=0, column=0, columnspan=2, pady=6)
+        ButtonSecondary(btn_frame, text=f"Reset ({HOTKEYS['restart']['key_str']})", command=self._on_reset_attempt).grid(row=0, column=1, sticky="ew", padx=2, pady=2)
         ButtonDanger(btn_frame, text="Concede", command=self._on_concede).grid(row=1, column=0, sticky="ew", padx=2, pady=2)
-        ButtonSecondary(btn_frame, text="Competition" if self.is_competition else "Stages List",
+        ButtonSecondary(btn_frame, text="Stages List",
                         command=self._on_back_to_select).grid(row=1, column=1, sticky="ew", padx=2, pady=2)
 
         btn_frame.columnconfigure(0, weight=1)
@@ -247,8 +223,6 @@ class PuzzleGameView(tk.Frame):
         self._update_ui_state()
 
     def _bind_hotkeys(self):
-        if self.is_competition:
-            return
         self.app.bind(HOTKEYS['undo']['seq'], lambda e: self._on_undo())
         self.app.bind(HOTKEYS['restart']['seq'], lambda e: self._on_reset_attempt())
 
@@ -365,8 +339,6 @@ class PuzzleGameView(tk.Frame):
         self.canvas.create_text(cx, cy, text=piece.p_type, font=(FONT_NAME, font_sz, "bold"), fill='#FFFFFF')
 
     def _on_board_click(self, event):
-        if self._competition_expired():
-            return
         if not self.is_game_active or self.state.winner is not None or self.state.current_turn != 0:
             return
 
@@ -398,7 +370,7 @@ class PuzzleGameView(tk.Frame):
                 self._draw_board()
 
     def _execute_player_move(self, start: Tuple[int, int], end: Tuple[int, int]):
-        if not self.is_game_active or self._competition_expired():
+        if not self.is_game_active:
             return
         move = make_puzzle_move(self.state, start, end)
         if not move:
@@ -427,8 +399,6 @@ class PuzzleGameView(tk.Frame):
         self.ai_timer_id = None
         if not self.is_game_active or self.state.current_turn != 1:
             return
-        if self._competition_expired():
-            return
         agent_model = self.config.get('agent_model', 'proposed_d6')
         depth = self.config.get('search_depth', 6)
         weights = self.config.get('weights', DEFAULT_EVALUATION_WEIGHTS)
@@ -437,12 +407,8 @@ class PuzzleGameView(tk.Frame):
             state=self.state,
             agent_model=agent_model,
             depth=depth,
-            weights=weights,
-            time_budget=min(1.95, max(0.0, self.competition_attempt.remaining_seconds - 0.05))
-                        if self.is_competition else 1.95
+            weights=weights
         )
-        if self._competition_expired():
-            return
 
         if not best_move:
             self.state.current_turn = 0
@@ -465,8 +431,6 @@ class PuzzleGameView(tk.Frame):
         def do_move():
             self.ai_timer_id = None
             if not self.is_game_active:
-                return
-            if self._competition_expired():
                 return
             make_puzzle_move(self.state, s, e)
             self.last_move = (s, e)
@@ -544,8 +508,6 @@ class PuzzleGameView(tk.Frame):
             self.btn_undo.config(state=tk.NORMAL, fg=THEME['text'])
 
     def _on_undo(self):
-        if getattr(self, 'is_competition', False):
-            return
         if not self.config.get('undo_enabled', True) or not self.is_game_active:
             return
 
@@ -562,8 +524,6 @@ class PuzzleGameView(tk.Frame):
         self._update_ui_state()
 
     def _on_reset_attempt(self):
-        if self.is_competition:
-            return
         if self.ai_timer_id is not None:
             self.after_cancel(self.ai_timer_id)
             self.ai_timer_id = None
@@ -583,9 +543,6 @@ class PuzzleGameView(tk.Frame):
 
     def _handle_puzzle_finish(self, solved: bool, reason: str = ""):
         if not self.is_game_active:
-            return
-        if self.is_competition:
-            self._handle_competition_finish(solved, reason)
             return
         self.is_game_active = False
         time_spent = int(time.time() - self.start_time)
@@ -709,15 +666,10 @@ class PuzzleGameView(tk.Frame):
 
     def _on_back_to_select(self):
         self._cleanup()
-        self.app.show_view('competition' if self.is_competition else 'puzzle_select')
+        self.app.show_view('puzzle_select')
 
     def _cleanup(self):
-        if self.is_competition and self.is_game_active:
-            self._record_competition_result(False, 'Left game')
         self.is_game_active = False
-        if self.competition_timer_id is not None:
-            self.after_cancel(self.competition_timer_id)
-            self.competition_timer_id = None
         if self._resize_job is not None:
             try:
                 self.after_cancel(self._resize_job)
@@ -728,45 +680,3 @@ class PuzzleGameView(tk.Frame):
         if self.ai_timer_id:
             self.after_cancel(self.ai_timer_id)
             self.ai_timer_id = None
-
-    def _competition_expired(self):
-        if self.is_competition and self.competition_attempt and self.competition_attempt.expired:
-            self._handle_puzzle_finish(False, 'Time limit reached')
-            return True
-        return False
-
-    def _tick_competition(self):
-        self.competition_timer_id = None
-        if not self.is_game_active or self._competition_expired():
-            return
-        seconds = math.ceil(self.competition_attempt.remaining_seconds)
-        self.lbl_competition_clock.config(text=f'Time remaining: {seconds // 60}:{seconds % 60:02d}')
-        self.competition_timer_id = self.after(100, self._tick_competition)
-
-    def _record_competition_result(self, solved, reason):
-        if self.competition_result is None:
-            result = self.competition_attempt.finish(solved, self.session.current_attempt_steps)
-            if self.competition_attempt.expired:
-                reason = 'Time limit reached'
-            result['reason'] = reason or ('Solved' if result['solved'] else 'Failed')
-            storage.save_competition_score(challenge_key(self.scenario),
-                self.config.get('p1_name', 'Player 1'), steps=result['steps'],
-                elapsed_seconds=result['elapsed_seconds'], solved=result['solved'], reason=result['reason'])
-            self.competition_result = result
-        return self.competition_result
-
-    def _handle_competition_finish(self, solved, reason):
-        result = self._record_competition_result(solved, reason)
-        self.is_game_active = False
-        self._cleanup()
-        modal = ThemedModal(self, 'Competition Result', min_width=400)
-        tk.Label(modal.body, text=f"Score: {result['score']}", font=(FONT_NAME, 22, 'bold'),
-                 bg=THEME['surface'], fg=THEME['text']).pack(pady=10)
-        tk.Label(modal.body, text=f"{result['reason']}\nMoves: {result['steps']} | Time: {result['elapsed_seconds']:.2f} s",
-                 bg=THEME['surface'], fg=THEME['text_muted']).pack(pady=8)
-
-        def next_player():
-            modal.dismiss()
-            self.app.show_view('competition')
-
-        ButtonPrimary(modal.footer, text='Standings / Next Player', command=next_player).pack(side=tk.RIGHT)
