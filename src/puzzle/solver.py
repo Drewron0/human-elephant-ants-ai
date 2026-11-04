@@ -1,4 +1,4 @@
-"""Exact adversarial solver for puzzle positions and puzzle-specific move rules."""
+"""Exact solver for puzzle positions to verify winnable paths."""
 
 import hashlib
 import math

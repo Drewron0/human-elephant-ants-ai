@@ -1,1 +1,0 @@
-"""Chess-Sut test package."""

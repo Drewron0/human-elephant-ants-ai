@@ -169,7 +169,7 @@ def get_all_puzzles() -> dict[str, PuzzleScenario]:
 
 @dataclass
 class PuzzleSession:
-    """Track one stage run: steps, undos, resets, outcome and per-turn AI telemetry."""
+    """Track one stage run: steps, undos, resets, and match outcome."""
 
     scenario: PuzzleScenario
     show_metrics: bool = False

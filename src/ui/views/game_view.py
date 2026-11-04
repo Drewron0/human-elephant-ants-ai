@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from config import settings
 from src import storage
-from src.ai.practice import DIFFICULTY_LABELS, get_ai_move_with_delay
+from src.ai.practice import DIFFICULTY_LABELS, get_ai_move
 from src.core.game_logic import Coord, GameState, MoveTuple
 from src.ui.background import BackgroundTask
 from src.ui.dialogs import Dialog, confirm
@@ -42,7 +42,6 @@ class GameView(PlayView):
         self.time_p1 = self.time_limit
         self.time_p2 = self.time_limit
         self.timer_id: str | None = None
-        self.ai_timer_id: str | None = None
         self._ai_task: BackgroundTask | None = None
         self.is_game_active = True
         self._build_ui()
@@ -139,23 +138,16 @@ class GameView(PlayView):
         difficulty = self.config_options.get("difficulty", "normal")
         self._ai_task = BackgroundTask(
             self,
-            lambda _cancel, _report: get_ai_move_with_delay(position, difficulty),
+            lambda _cancel, _report: get_ai_move(position, difficulty),
             self._on_ai_ready,
             self._on_ai_failed,
         )
         self._ai_task.start()
 
-    def _on_ai_ready(self, result: tuple[MoveTuple | None, float]) -> None:
+    def _on_ai_ready(self, move: MoveTuple | None) -> None:
         self._ai_task = None
-        move, delay = result
-        if move is None or not self.is_game_active:
-            return
-
-        def play() -> None:
-            self.ai_timer_id = None
+        if move is not None and self.is_game_active:
             self._execute_move(move[0], move[1])
-
-        self.ai_timer_id = self.after(int(delay * 1000), play)
 
     def _on_ai_failed(self, message: str) -> None:
         self._ai_task = None
@@ -168,9 +160,6 @@ class GameView(PlayView):
         if self._ai_task is not None:
             self._ai_task.cancel()
             self._ai_task = None
-        if self.ai_timer_id is not None:
-            self.after_cancel(self.ai_timer_id)
-            self.ai_timer_id = None
 
     def _update_ui_state(self) -> None:
         self.render_board()

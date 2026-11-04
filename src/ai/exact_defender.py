@@ -1,4 +1,4 @@
-"""Puzzle defender that plays only proven replies and never guesses on timeout."""
+"""Puzzle defender computing optimal responses for puzzle positions."""
 
 import math
 import threading
@@ -38,7 +38,7 @@ def get_exact_defender_reply(
     node_budget: int = settings.EXACT_NODE_BUDGET,
     cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
-    """Use a proven reply or solve the finite puzzle exactly; never guess on timeout."""
+    """Compute the best reply for the defender in puzzle mode."""
     started = time.perf_counter()
     telemetry = SearchTelemetry()
     policy = policy or {}

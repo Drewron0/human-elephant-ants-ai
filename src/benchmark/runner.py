@@ -1,4 +1,4 @@
-"""Seeded corpus generation and the defender comparison experiment."""
+"""Benchmark runner comparing AI agent performance across test games."""
 
 import hashlib
 import json
@@ -28,7 +28,7 @@ def generate_benchmark_corpus(
     board_size: int = settings.BENCHMARK_BOARD_SIZE,
     seed: int = settings.BENCHMARK_SEED,
 ) -> list[PuzzleScenario]:
-    """Generate the seeded, certified 10-step positions used by the benchmark lab."""
+    """Generate deterministic test board positions used by the benchmark lab."""
     if num_games < 1 or board_size < settings.BENCHMARK_BOARD_SIZE:
         raise ValueError(
             f"Benchmark needs at least one game and a board size of "
@@ -159,7 +159,7 @@ def run_simulation_benchmark(
     turn_callback: TurnCallback | None = None,
     cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
-    """Compare a defender on a shared certified corpus; emit optional per-turn records."""
+    """Compare defender performance on test positions and record statistics."""
     if agent_model not in [agent.model for agent in BENCHMARK_AGENTS]:
         raise ValueError("Unknown benchmark agent")
     if scripted_player_type not in BENCHMARK_PLAYERS or num_games < 1:

@@ -1,8 +1,4 @@
-"""Pillow renderers for tokens, tiles, panels, buttons and icons.
-
-Each renderer draws at a supersampled size and downscales, which gives smooth
-antialiased edges that Tk canvases cannot produce, and caches by exact size.
-"""
+"""Image renderers for game tokens, board tiles, buttons, and icons."""
 
 import math
 from functools import lru_cache
@@ -416,7 +412,7 @@ def menu_background_image(width: int, height: int) -> Image.Image:
 
 @lru_cache(maxsize=128)
 def icon_image(name: str, size: int, color: str) -> Image.Image:
-    """Render a simple monochrome symbol, in the spirit of SF Symbols."""
+    """Render a simple monochrome vector icon."""
     if name not in ICON_NAMES:
         raise ValueError(f"Unknown icon: {name}")
     s = size * SUPERSAMPLE * 2

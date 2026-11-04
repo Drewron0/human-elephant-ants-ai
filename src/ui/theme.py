@@ -1,9 +1,4 @@
-"""Design tokens: color, typography, spacing and density, following Apple's HIG.
-
-The system is deliberately small. Every control shares one corner radius, spacing
-comes from one scale, and text uses one family in five sizes and two weights. Text
-is ink or muted ink; color is kept for state, so hierarchy comes from size and space.
-"""
+"""Theme configuration: color palette, typography scales, and UI layout metrics."""
 
 import tkinter as tk
 from tkinter import font as tkfont

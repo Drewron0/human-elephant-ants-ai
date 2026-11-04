@@ -134,7 +134,7 @@ class BenchmarkView(SceneView):
         games = int(self.var_games.get())
         board_size = int(self.var_size.get().split("x")[0])
         self.progress_bar.set(0, games * len(combinations))
-        self.lbl_status.configure(text="Generating the certified corpus...", fg=COLORS["ink_muted"])
+        self.lbl_status.configure(text="Generating test positions...", fg=COLORS["ink_muted"])
 
         def work(cancel: threading.Event, report: Callable[[Any], None]) -> list[dict[str, Any]]:
             corpus = generate_benchmark_corpus(games, board_size)

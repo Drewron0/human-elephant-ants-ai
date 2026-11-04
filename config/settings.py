@@ -1,8 +1,4 @@
-"""Every tunable constant, parameter and file path used by Chess-Sut.
-
-Values can be overridden with environment variables or a local ``.env`` file.
-Logic modules import from here so no parameter is hardcoded at the logic level.
-"""
+"""Global configuration parameters, constants, and default settings for Chess-Sut."""
 
 import os
 from pathlib import Path
@@ -108,19 +104,6 @@ EASY_TOP_MOVES: Final[int] = 3
 EASY_MISTAKE_RATE: Final[float] = 0.35
 NORMAL_DEPTH: Final[int] = 2
 HARD_DEPTH: Final[int] = 3
-AI_DELAY_WINNING_MOVE: Final[float] = 0.8
-AI_DELAY_NO_MOVE: Final[float] = 0.5
-AI_DELAY_OPTIMIZED_MIN: Final[float] = 0.5
-AI_DELAY_OPTIMIZED_MAX: Final[float] = 2.0
-AI_DELAY_EASY_BASE: Final[float] = 1.0
-AI_DELAY_EASY_PER_MOVE: Final[float] = 1.0 / 30.0
-AI_DELAY_EASY_MOVE_CAP: Final[int] = 15
-AI_DELAY_NORMAL_BASE: Final[float] = 1.6
-AI_DELAY_NORMAL_NODE_DIVISOR: Final[float] = 100.0
-AI_DELAY_NORMAL_NODE_CAP: Final[float] = 1.2
-AI_DELAY_HARD_BASE: Final[float] = 2.4
-AI_DELAY_HARD_NODE_DIVISOR: Final[float] = 200.0
-AI_DELAY_HARD_NODE_CAP: Final[float] = 2.0
 
 # Puzzle mode
 PUZZLE_MOVE_LIMIT_MULTIPLIER: Final[int] = 3

@@ -1,1 +1,1 @@
-"""Adversarial search agents, evaluation functions and telemetry."""
+"""AI search agents and board evaluation functions."""

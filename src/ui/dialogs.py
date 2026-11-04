@@ -111,7 +111,7 @@ def confirm(
     cancel_text: str = "Cancel",
     destructive: bool = True,
 ) -> Dialog:
-    """Show a two-button alert, as the HIG asks for before destructive actions."""
+    """Show a two-button confirmation dialog before taking an action."""
     dialog = Dialog(parent, title, message)
     dialog.add_action(cancel_text, cancel=True)
     dialog.add_action(
