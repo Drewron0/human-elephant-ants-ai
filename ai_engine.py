@@ -252,6 +252,83 @@ class SearchTimeout(Exception):
     pass
 
 
+def get_exact_defender_reply(state: GameState, remaining_steps: int, policy=None,
+                             time_budget: float = 120.0, node_budget: int = 3000000,
+                             cancel_event=None) -> Dict[str, Any]:
+    """Use a proven reply or solve the finite puzzle exactly; never guess on timeout."""
+    from puzzle_logic import verify_puzzle, puzzle_position_key, make_puzzle_move
+
+    started = time.perf_counter()
+    telemetry = SearchTelemetry()
+    policy = policy or {}
+    pieces = [(r, c, p.owner, p.p_type) for r, row in enumerate(state.board)
+              for c, p in enumerate(row) if p]
+    key = puzzle_position_key(state.board_size, pieces, state.target_corners[0])
+
+    def result(status, move=None, steps=None, updates=None):
+        telemetry.t_turn = time.perf_counter() - started
+        telemetry.completed_depth = (steps if steps is not None else remaining_steps) if status == 'PROVEN' else 0
+        return dict(status=status, move=move, eval_score=(100000.0 - steps) if steps is not None else -100000.0,
+                    telemetry=telemetry, defender_policy=updates or {},
+                    proof_horizon=telemetry.completed_depth)
+
+    if cancel_event is not None and cancel_event.is_set():
+        return result('UNVERIFIED')
+    if state.current_turn != 1 or state.winner is not None or remaining_steps <= 0:
+        return result('TERMINAL')
+    legal = state.get_valid_moves(1)
+    if not legal:
+        return result('NO_MOVES')
+
+    entry = policy.get(key)
+    if isinstance(entry, dict):
+        try:
+            move = tuple(tuple(coord) for coord in entry['move'])
+            steps = entry['steps']
+            usable = (type(steps) is int and steps >= 0) or (
+                steps is None and entry['remaining'] >= remaining_steps)
+            if usable and move in legal:
+                return result('PROVEN', move, steps)
+        except (KeyError, TypeError, ValueError):
+            pass
+
+    telemetry.nodes_generated += len(legal)
+    for index, move in enumerate(legal):
+        if cancel_event is not None and cancel_event.is_set():
+            return result('UNVERIFIED')
+        telemetry.nodes_evaluated += 1
+        child = state.clone()
+        make_puzzle_move(child, *move)
+        if child.winner == 1:
+            telemetry.nodes_pruned += len(legal) - index - 1
+            update = {key: dict(move=move, steps=None, remaining=remaining_steps)}
+            return result('PROVEN', move, updates=update)
+
+    distance = min((max(abs(r - state.target_corners[0][0]), abs(c - state.target_corners[0][1]))
+                    for r, c, owner, _ in pieces if owner == 0), default=math.inf)
+    if distance > remaining_steps:
+        # No player piece can reach the corner before the move limit, regardless of the reply.
+        update = {key: dict(move=legal[0], steps=None, remaining=remaining_steps)}
+        return result('PROVEN', legal[0], updates=update)
+
+    proof = verify_puzzle(state.board_size, pieces, state.target_corners[0],
+                          max_steps=remaining_steps, time_budget=time_budget,
+                          node_budget=node_budget, current_turn=1, cancel_event=cancel_event)
+    telemetry.nodes_generated += proof.get('nodes_generated', 0)
+    telemetry.nodes_evaluated += proof.get('nodes_evaluated', 0)
+    telemetry.nodes_pruned = proof.get('nodes_pruned', 0)
+    if proof['status'] == 'UNVERIFIED':
+        telemetry.timed_out = True
+        return result('UNVERIFIED')
+    entry = proof['defender_policy'].get(key)
+    if entry is None:
+        return result('UNVERIFIED')
+    move = tuple(tuple(coord) for coord in entry['move'])
+    if move not in legal:
+        return result('UNVERIFIED')
+    return result('PROVEN', move, entry['steps'], proof['defender_policy'])
+
+
 # Optimized Minimax with Alpha-Beta Pruning and Move Ordering
 def _minimax_ab_internal(
     state: GameState,

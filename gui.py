@@ -1,5 +1,4 @@
 import tkinter as tk
-from queue import Queue
 from typing import Dict, Any, Optional
 from ui_theme import THEME, setup_ttk_styles
 from views.menu_view import MainMenuView
@@ -11,7 +10,6 @@ from views.stage_editor_view import StageEditorView
 from views.benchmark_view import BenchmarkView
 from views.leaderboard_view import LeaderboardView
 from views.tutorial_view import TutorialView
-from views.competition_view import CompetitionView
 
 
 class GameApp(tk.Tk):
@@ -38,10 +36,6 @@ class GameApp(tk.Tk):
         self.container.pack(fill=tk.BOTH, expand=True)
 
         self.current_view: Optional[tk.Frame] = None
-        self.random_challenge_queue = Queue()
-        self.random_challenge_loading = False
-        self.random_challenges = None
-        self.random_challenge_error = None
         self.protocol('WM_DELETE_WINDOW', self._on_close)
         self.show_view('menu')
 
@@ -54,8 +48,6 @@ class GameApp(tk.Tk):
 
         if view_name == 'menu':
             self.current_view = MainMenuView(self.container, self)
-        elif view_name == 'competition':
-            self.current_view = CompetitionView(self.container, self)
         elif view_name == 'puzzle_select':
             self.current_view = PuzzleSelectView(self.container, self)
         elif view_name == 'stage_editor':

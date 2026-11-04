@@ -6,8 +6,9 @@ from game_logic import GameState, Piece, BEATS, PREDATORS, TARGET_CORNERS
 from puzzle_logic import (
     bfs_safe_path,
     find_optimal_winning_path,
-    generate_winnable_puzzle,
-    PRECONFIGURED_STAGES_6X6,
+    make_puzzle_move,
+    verify_puzzle,
+    puzzle_position_key,
     PuzzleScenario,
 )
 from ai_engine import evaluate_non_transitive, get_defender_move, DEFAULT_EVALUATION_WEIGHTS
@@ -49,21 +50,76 @@ class TestGameLogic(unittest.TestCase):
 
 
 class TestPuzzleLogic(unittest.TestCase):
-    # Tests BFS safe path search, preset stages, and random puzzle generation
-    def test_legacy_presets_do_not_claim_unproven_optima(self) -> None:
-        for stage_key, scenario in PRECONFIGURED_STAGES_6X6.items():
-            self.assertEqual(scenario.verification_status, 'UNVERIFIED', stage_key)
-            self.assertEqual(scenario.optimal_path, [])
-            self.assertIn('unverified', scenario.step_label)
+    # Tests author-entered minimums and independent search utilities.
+    def test_saved_minimum_is_preserved_instead_of_recalculated(self) -> None:
+        pieces = [(3, 0, 0, 'H')] + [(1, c, 1, 'E') for c in range(3)]
+        scenario = PuzzleScenario.from_dict(dict(
+            id='detour', board_size=4, pieces=pieces, s_optimal=6,
+            optimal_path=[(3, 0), (0, 3)]))
+        # Three diagonal moves would have to pass through blocked (1, 2).
+        self.assertEqual(scenario.s_optimal, 6)
+        self.assertEqual(scenario.optimal_path, [])
+        self.assertEqual(scenario.s_max, 18)
+        self.assertEqual(PuzzleScenario('old', 'Old', '', 4, 6, pieces).s_optimal, 6)
+        static_steps, static_path, _ = find_optimal_winning_path(4, pieces)
+        self.assertEqual(static_steps, 4)
+        self.assertNotIn((1, 2), static_path)
 
-    def test_random_winnable_generator(self) -> None:
-        for _ in range(3):
-            scenario = generate_winnable_puzzle(board_size=6, min_steps=5, max_steps=8)
-            target = (0, scenario.board_size - 1)
-            d, path, best_pc = find_optimal_winning_path(scenario.board_size, scenario.pieces, target)
-            self.assertIsNotNone(path)
-            self.assertIsNotNone(d)
-            self.assertGreaterEqual(d, 3)
+        pieces_without_obstacles = [(3, 0, 0, 'H')]
+        steps, _, _ = find_optimal_winning_path(4, pieces_without_obstacles)
+        self.assertEqual(steps, 3)
+
+    def test_static_minimum_respects_cyclic_capture_rules(self) -> None:
+        for enemy, expected in [('A', 2), ('H', 3), ('E', 3)]:
+            with self.subTest(enemy=enemy):
+                steps, path, _ = find_optimal_winning_path(
+                    3, [(2, 0, 0, 'H'), (1, 1, 1, enemy)])
+                self.assertEqual(steps, expected)
+                self.assertEqual((1, 1) in path, enemy == 'A')
+
+    def test_unreachable_corner_does_not_fall_back_to_six_steps(self) -> None:
+        scenario = PuzzleScenario.from_dict(dict(
+            id='blocked', board_size=3,
+            pieces=[(2, 0, 0, 'H'), (0, 2, 1, 'E')]))
+        self.assertIsNone(scenario.s_optimal)
+        self.assertEqual(scenario.optimal_path, [])
+        self.assertEqual(scenario.step_summary, 'Minimum: not set')
+
+    def test_verified_minimum_is_loaded_without_recalculating(self) -> None:
+        from unittest.mock import patch
+        pieces = [(2, 0, 0, 'H'), (0, 0, 1, 'H')]
+        result = verify_puzzle(3, pieces, max_steps=3)
+        payload = dict(id='verified', board_size=3, pieces=pieces,
+                       s_optimal=result['steps'], optimal_path=result['path'],
+                       optimal_moves=result['moves'], verification_status=result['status'],
+                       verification_method=result['method'], verification_key=result['position_key'])
+        with patch('puzzle_logic.verify_puzzle') as verify, \
+                patch('puzzle_logic.find_optimal_winning_path') as static:
+            scenario = PuzzleScenario.from_dict(payload)
+        verify.assert_not_called()
+        static.assert_not_called()
+        self.assertEqual(scenario.s_optimal, 2)
+        self.assertEqual(scenario.s_max, 6)
+        self.assertTrue(scenario.optimal_moves)
+        self.assertEqual(scenario.to_dict()['verification_key'], puzzle_position_key(3, pieces))
+        self.assertEqual(PuzzleScenario.from_dict(scenario.to_dict()).s_optimal, 2)
+        payload['s_max'] = 1
+        self.assertEqual(PuzzleScenario.from_dict(payload).s_max, 6)
+
+        payload['pieces'] = [(2, 0, 0, 'H'), (0, 1, 1, 'E')]
+        stale = PuzzleScenario.from_dict(payload)
+        self.assertEqual(stale.s_optimal, 2)
+        self.assertEqual(stale.verification_status, 'UNVERIFIED')
+        self.assertEqual(stale.optimal_path, [])
+
+    def test_minimum_selects_best_player_piece(self) -> None:
+        steps, path, piece = find_optimal_winning_path(
+            6, [(5, 0, 0, 'H'), (2, 3, 0, 'E')])
+        self.assertEqual(steps, 2)
+        self.assertEqual(piece, (2, 3, 'E'))
+        self.assertEqual(path[0], (2, 3))
+        self.assertEqual(path[-1], (0, 5))
+
 
 
 class TestStorageCRUD(unittest.TestCase):

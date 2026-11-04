@@ -1,6 +1,6 @@
 # Chess-Sut: Human-Elephant-Ant AI Tactical Game
 
-An adversarial tactical board game and AI research framework developed for the Artificial Intelligence course at Universitas Ciputra Surabaya (2026). The defender uses depth-limited Minimax with Alpha-Beta Pruning, move ordering, and non-transitive evaluation. Bounded puzzle verification reports uncertainty explicitly; the playing agent is not a proof of globally optimal defense.
+An adversarial tactical board game and AI research framework developed for the Artificial Intelligence course at Universitas Ciputra Surabaya (2026). Puzzle mode defaults to proven exact defense. Practice and benchmark agents use depth-limited Minimax, Alpha-Beta Pruning, move ordering and non-transitive evaluation. Incomplete exact analysis is reported explicitly and never replaced with a guessed reply.
 
 ---
 
@@ -21,28 +21,22 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 
 ## 2. Core Features
 
-### Four-minute AI competition
-- Choose **AI Competition (4 Minutes)** from the main menu. Every player faces the same selected challenge and optimized depth-6 AI.
-- One attempt per player per challenge in a round. The four-minute wall clock includes AI search and response time. Undo and reset are unavailable; leaving a game records a zero-point forfeit.
-- A win before the deadline scores `max(0, 1000 - 10 * player_moves)`. A loss or timeout scores zero. Higher scores rank first; equal scores use faster completion. Failed attempts do not receive a winning rank.
-- The competition screen shows standings for each of three fixed challenges. **Clear This Round** starts a new contest for the selected challenge after confirmation. Practice records and other challenges are preserved.
-- Direct PvP and networking have been removed. AI practice, puzzle practice, the stage editor and the benchmark lab remain available.
-
 ### Modern Clean Dark Design System
 - Built with restrained typography, high-contrast dark system palette (`#121214`, `#1C1C1E`, `#2C2C2E`), and subtle elevation.
 - Fluid, interactive splitters (`tk.PanedWindow`) allowing users to resize sidebars while the board dynamically scales to fit the container.
 
 ### Tactical Stage Studio & Custom Stage Builder
-- **Preset Tactical Stages:** Legacy tactical boards remain playable with reference step counts and limits. Their invalid stored routes were removed; their counts are labeled unverified, not optimal.
-- **Custom Stage Editor:** Existing board editor with bounded adversarial verification. Every legal defensive reply is considered. A budget exhaustion returns `UNVERIFIED`; a completed negative search means no forced corner win within its horizon, not a proof of permanent impossibility. Static BFS is never used as a forced-win proof.
-- **Procedural Winnability Generator:** Certified sparse race puzzles, generated in background threads. A single attacker can capture every defender, and geometric distance proves its earliest corner arrival precedes the defender's earliest win. Different sizes provide different exact step counts.
-- **Stage Selection and Thumbnails:** Interactive catalog featuring live board thumbnail previews, AI difficulty mode selectors, player selection, and per-stage leaderboard tracking.
+- **Author-entered Minimum Steps:** The custom stage editor requires a positive whole-number minimum entered by the author. New stages start with a blank field; editing prefills the saved value. Saving and loading preserve this number exactly, without a search, verification button or proof prerequisite. The move limit remains three times the entered minimum.
+- **Saved Stage Counts:** User-entered values are labeled `Minimum (user-entered)`, not claimed as algorithmically verified. Older stored counts remain available and editable. A stage without a valid count prompts the author to enter one before play. Saving an edit replaces obsolete automatic-verification metadata with the manual value.
+- **Exact Puzzle Defender:** AI move selection remains separate from the manual minimum and cannot change it. The default model analyzes defensive replies exactly within the remaining game move limit, using existing valid cached replies when available. Analysis has the 120-second/3,000,000-node budget. If it is incomplete, the AI pauses with Retry/Undo/Reset available and never falls back to a shallow or random reply. Deliberately weaker practice baselines remain explicit choices, and benchmark agents are unchanged.
+- **Recoverable Mistakes:** Losing the puzzle leaves its board and move history available for Undo or Reset. Each successful undo action is counted, including when it restores both the player's move and the AI's reply. Losing a predicted winning strategy does not immediately end play.
+- **Custom Stages Only:** The puzzle menu loads stages created and saved by users. Create, edit, delete and play custom stages from one catalog with board thumbnails, AI selection and per-stage records. An empty catalog prompts the user to create a stage; Play stays disabled. Built-in presets, category tabs and random challenges have been removed, including their worker/cache/polling code and launch fallbacks.
 - **Spoiler Prevention Toggle:** Toggle search metrics display before playing to prevent move spoilers.
 
 ### Adversarial Search Architecture
 - **Algorithm:** Minimax Search with Alpha-Beta Pruning, Leaf Node Evaluation, and Dynamic Move Ordering.
 - **Non-Transitive Evaluation Function:** Dynamic piece weights computed from opponent's remaining suit distribution combined with corner distance Chebyshev/Manhattan heuristics.
-- **Search Budget:** Optimized search uses iterative deepening with a 1.95-second budget and a legal fallback. An interrupted iteration is discarded and the board is restored. Telemetry reports completed depth and timeouts; depth 6 and a hard wall-clock bound are not guaranteed on arbitrary hardware. The vanilla baseline has no time cutoff.
+- **Practice/Benchmark Search Budget:** Optimized practice and benchmark search uses iterative deepening with a 1.95-second budget and a legal fallback. An interrupted iteration is discarded and the board is restored. Telemetry reports completed depth and timeouts; depth 6 and a hard wall-clock bound are not guaranteed on arbitrary hardware. The vanilla baseline has no time cutoff. Puzzle mode's default Exact Defender uses the proof solver described above instead.
 
 ---
 
@@ -51,11 +45,10 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 ```text
 AFL2/
 |-- ai_engine.py             # Minimax search, Alpha-Beta pruning, evaluation function
-|-- competition.py           # Four-minute clock and competition scoring rules
 |-- game_logic.py            # Board representation, state transitions, cyclic captures
 |-- gui.py                   # Master Tkinter application controller
 |-- main.py                  # Application entry point
-|-- puzzle_logic.py          # 10 6x6 stages, BFS safe path solver, random generator
+|-- puzzle_logic.py          # Custom-stage catalog, verification and benchmark simulations
 |-- run_benchmark.py         # Automated CLI benchmark runner for research metrics
 |-- storage.py               # JSON persistence for profiles, leaderboards, and custom stages
 |-- ui_theme.py              # Dark theme definitions, colors, and components
@@ -64,14 +57,13 @@ AFL2/
 |   |-- test_game.py         # Unit test suite covering mechanics, AI, and CRUD
 `-- views/
     |-- benchmark_view.py    # GUI benchmarking and simulation lab
-    |-- competition_view.py  # Fixed challenges, player entry and standings
     |-- config_view.py       # Game setup and player preferences
     |-- game_view.py         # Standard match view with resizable paned layout
     |-- leaderboard_view.py  # Global and per-stage records
     |-- menu_view.py         # Main navigation hub
     |-- puzzle_game_view.py  # Puzzle gameplay view with real-time defender AI
     |-- puzzle_select_view.py# Stage selector with thumbnails, AI picker, and leaderboards
-    |-- stage_editor_view.py # Interactive stage designer with instant BFS solver
+    |-- stage_editor_view.py # Stage editor with author-entered minimum steps
     `-- tutorial_view.py     # How-to-play interactive manual
 ```
 
@@ -111,8 +103,8 @@ AFL2/
 python main.py
 ```
 
-### Run Stage Winnability Verification
-Reports exact bounded verification for legacy boards and 20 generated benchmark puzzles. Exit codes: 0 = verified, 1 = no forced win within the horizon, 2 = verification budget exhausted. To check only generated puzzles:
+### Optional Offline Search Diagnostics
+This developer utility reports bounded search results without changing saved author-entered minimums. It is not part of creating, saving or loading a stage. Exit codes: 0 = verified, 1 = no forced win within the horizon, 2 = verification budget exhausted. To check only benchmark puzzles:
 ```bash
 python verify_stages.py
 python verify_stages.py --generated-only

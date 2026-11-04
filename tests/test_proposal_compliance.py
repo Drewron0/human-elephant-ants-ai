@@ -2,11 +2,11 @@ import math
 import unittest
 from unittest.mock import patch, Mock
 
-from ai_engine import get_defender_move
+from ai_engine import get_defender_move, SearchTelemetry
 from game_logic import GameState, Piece
 from puzzle_logic import (generate_benchmark_corpus, verify_puzzle, bfs_safe_path,
                           ShortestPathScriptedPlayer, run_simulation_benchmark,
-                          make_puzzle_move, PuzzleSession)
+                          make_puzzle_move, PuzzleSession, find_optimal_winning_path)
 from run_benchmark import parse_args
 from views.puzzle_game_view import PuzzleGameView
 
@@ -75,6 +75,25 @@ class TestSearchCompliance(unittest.TestCase):
 
 
 class TestVerificationCompliance(unittest.TestCase):
+    def test_supplied_dense_board_is_not_a_six_move_forced_win(self):
+        pieces = [(4, 0, 0, 'A'), (5, 0, 0, 'H'), (5, 1, 0, 'E'),
+                  (0, 2, 1, 'H'), (0, 3, 1, 'E'),
+                  (1, 2, 1, 'H'), (1, 3, 1, 'E'), (1, 4, 1, 'H'),
+                  (2, 2, 1, 'H'), (2, 3, 1, 'E'), (2, 4, 1, 'E'),
+                  (3, 3, 1, 'E'), (3, 4, 1, 'E'), (3, 5, 1, 'E'),
+                  (4, 4, 1, 'A'), (4, 5, 1, 'A'),
+                  (5, 4, 1, 'A'), (5, 5, 1, 'A')]
+        static_steps, path, _ = find_optimal_winning_path(6, pieces)
+        self.assertEqual(static_steps, 6)
+        state = GameState(6, custom_setup=True)
+        for r, c, owner, pt in pieces:
+            state.board[r][c] = Piece(owner, pt)
+        make_puzzle_move(state, path[0], path[1])
+        self.assertIn(((2, 2), (3, 1)), state.get_valid_moves(1))
+        result = verify_puzzle(6, pieces, max_steps=6, time_budget=5.0, node_budget=150000)
+        self.assertEqual(result['status'], 'NO_WIN_WITHIN_LIMIT')
+        self.assertIsNone(result['steps'])
+
     def test_static_route_does_not_prove_win_against_moving_predator(self):
         pieces = [(2, 0, 0, 'H'), (0, 1, 1, 'E')]
         static_steps, _ = bfs_safe_path(3, pieces, (2, 0), (0, 2), 'H', False)
@@ -162,6 +181,64 @@ class TestBenchmarkCompliance(unittest.TestCase):
 
 
 class TestPuzzleControls(unittest.TestCase):
+    def test_step_limit_loss_can_be_undone_without_ending_the_session(self):
+        view = object.__new__(PuzzleGameView)
+        view.config = {'undo_enabled': True}
+        view.is_game_active = True
+        view.session = PuzzleSession(generate_benchmark_corpus(1)[0])
+        view.session.current_attempt_steps = view.session.s_max - 1
+        view.state = GameState(3, custom_setup=True)
+        view.state.board[2][0] = Piece(0, 'H')
+        view.state.board[0][0] = Piece(1, 'H')
+        view.ai_timer_id = None
+        view._handle_puzzle_finish = Mock()
+        view._update_ui_state = Mock(side_effect=lambda: view.session.evaluate_status(view.state))
+        view.update_idletasks = Mock()
+        view.after = Mock()
+        view._execute_player_move((2, 0), (1, 1))
+        self.assertTrue(view.session.is_neutralized)
+        self.assertTrue(view.is_game_active)
+        view.after.assert_not_called()
+        view._handle_puzzle_finish.assert_not_called()
+        view._on_undo()
+        self.assertFalse(view.session.is_neutralized)
+        self.assertEqual(view.session.current_attempt_steps, view.session.s_max - 1)
+        self.assertEqual(view.session.undo_count, 1)
+
+    def test_losing_capture_keeps_undo_available_and_counts_it(self):
+        view = object.__new__(PuzzleGameView)
+        view.config = {'undo_enabled': True, 'agent_model': 'baseline_1_random'}
+        view.is_game_active = True
+        view.session = PuzzleSession(generate_benchmark_corpus(1)[0])
+        view.state = GameState(3, custom_setup=True)
+        view.state.board[2][0] = Piece(0, 'H')
+        view.state.board[0][1] = Piece(1, 'E')
+        before = view.state.to_dict()
+        view.ai_timer_id = None
+        view._handle_puzzle_finish = Mock()
+        view._update_ui_state = Mock(side_effect=lambda: view.session.evaluate_status(view.state))
+        view.update_idletasks = Mock()
+        callbacks = []
+        view.after = Mock(side_effect=lambda delay, callback: callbacks.append(callback) or 'pending')
+        view.after_cancel = Mock()
+        view._execute_player_move((2, 0), (1, 0))
+        with patch('views.puzzle_game_view.get_defender_move',
+                   return_value=(((0, 1), (1, 0)), -100000, SearchTelemetry())):
+            callbacks[0]()
+        callbacks[1]()
+        self.assertTrue(view.session.is_neutralized)
+        self.assertTrue(view.is_game_active)
+        view._handle_puzzle_finish.assert_not_called()
+        view._on_undo()
+        self.assertEqual(view.state.to_dict()['board'], before['board'])
+        self.assertEqual(view.state.current_turn, 0)
+        self.assertIsNone(view.state.winner)
+        self.assertFalse(view.session.is_neutralized)
+        self.assertEqual(view.session.undo_count, 1)
+        self.assertEqual(view.session.current_attempt_steps, 0)
+        view._on_undo()
+        self.assertEqual(view.session.undo_count, 1)
+
     def test_undo_pending_reply_preserves_the_previous_round(self):
         view = object.__new__(PuzzleGameView)
         view.config = {'undo_enabled': True}

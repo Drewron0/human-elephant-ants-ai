@@ -3,7 +3,6 @@ import os
 import uuid
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-from competition import calculate_score, TIME_LIMIT
 
 DB_FILE = 'leaderboard.json'
 SAVES_FILE = 'saved_games.json'
@@ -160,40 +159,6 @@ def clear_stage_leaderboard(stage_id: Optional[str] = None) -> None:
             del db["stages"][stage_id]
     else:
         db["stages"] = {}
-    _save_json(DB_FILE, db)
-
-
-# Competition rounds (stored separately from practice records).
-
-
-def get_competition_leaderboard(key: str) -> List[Dict[str, Any]]:
-    db = _load_json(DB_FILE, {})
-    records = db.get('competition', {}).get(key, [])
-    return sorted(records, key=lambda record: (-record['score'], record['elapsed_seconds']))
-
-
-def save_competition_score(key: str, username: str, steps: int, elapsed_seconds: float,
-                           solved: bool, reason: str = '') -> str:
-    username = username.strip()
-    if not username or steps < 0 or elapsed_seconds < 0:
-        raise ValueError('Invalid competition result')
-    db = _load_json(DB_FILE, {})
-    records = db.setdefault('competition', {}).setdefault(key, [])
-    if any(record['username'].casefold() == username.casefold() for record in records):
-        raise ValueError('This player has already played this challenge in the current round')
-    solved = bool(solved and elapsed_seconds < TIME_LIMIT)
-    record_id = str(uuid.uuid4())[:8]
-    records.append(dict(id=record_id, username=username, steps=steps,
-                        elapsed_seconds=elapsed_seconds, solved=solved, reason=reason,
-                        score=calculate_score(solved, steps, elapsed_seconds)))
-    _save_json(DB_FILE, db)
-    save_last_username(username)
-    return record_id
-
-
-def clear_competition_round(key: str) -> None:
-    db = _load_json(DB_FILE, {})
-    db.setdefault('competition', {}).pop(key, None)
     _save_json(DB_FILE, db)
 
 
