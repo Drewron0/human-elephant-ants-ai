@@ -25,8 +25,8 @@ BENCHMARK_AGENTS: tuple[AgentSpec, ...] = (
 )
 
 PUZZLE_AGENTS: tuple[AgentSpec, ...] = (
-    AgentSpec(EXACT_DEFENDER, 6, "Exact Defender (best defense)"),
     AgentSpec(OPTIMIZED_D6, 6, "Optimized Alpha-Beta (d=6)"),
+    AgentSpec(EXACT_DEFENDER, 6, "Exact Defender (may take long)"),
     AgentSpec(BASELINE_VANILLA, 3, "Practice: Vanilla Minimax"),
     AgentSpec(BASELINE_RANDOM, 1, "Practice: Random Moves"),
 )

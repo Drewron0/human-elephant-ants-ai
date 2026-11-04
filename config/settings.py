@@ -132,9 +132,8 @@ VERIFY_NODE_BUDGET: Final[int] = 30000
 EDITOR_BOARD_SIZES: Final[tuple[int, ...]] = (6, 7, 8, 9)
 EDITOR_DEFAULT_BOARD_SIZE: Final[int] = 6
 STAGE_LEADERBOARD_PREVIEW: Final[int] = 5
-DEFENDER_REPLY_DELAY_MS: Final[int] = 300
-AI_POLL_INTERVAL_MS: Final[int] = 50
-EXACT_PATIENCE_MS: Final[int] = 5000
+AI_POLL_INTERVAL_MS: Final[int] = 15
+UI_SWITCH_INTERVAL_S: Final[float] = 0.0002
 
 # Benchmark
 BENCHMARK_GAMES: Final[int] = 1000

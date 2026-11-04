@@ -17,7 +17,7 @@ Karena nilai bidak berputar seperti ini, penilaian material biasa tidak cukup. A
 Mode yang tersedia:
 
 - **Versus AI**: lawan komputer dengan pilihan tingkat kesulitan.
-- **Tactical Puzzles**: tembus AI yang bertahan, termasuk Exact Defender yang hanya memakai langkah terbukti terbaik.
+- **Tactical Puzzles**: tembus AI yang bertahan. Bawaannya Alpha-Beta; pilihan kedua, Exact Defender, hanya memakai langkah terbukti terbaik sehingga bisa lama.
 - **Stage Editor**: buat puzzle sendiri.
 - **Simulation Lab**: bandingkan performa setiap agen AI.
 

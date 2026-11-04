@@ -1,12 +1,14 @@
 """Application window: view routing, display density and shared UI resources."""
 
 import logging
+import sys
 import tkinter as tk
 from collections.abc import Callable
 from typing import Any
 
 from PIL import ImageTk
 
+from config import settings
 from src.ui import art
 from src.ui.dialogs import Dialog
 from src.ui.scene import SceneView
@@ -51,6 +53,7 @@ class GameApp(tk.Tk):
 
     def __init__(self) -> None:
         super().__init__()
+        sys.setswitchinterval(settings.UI_SWITCH_INTERVAL_S)
         METRICS.dpi_factor = self.winfo_fpixels("1i") / BASE_DPI
         self.title(APP_TITLE)
         self.configure(bg=COLORS["page"])
