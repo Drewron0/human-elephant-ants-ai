@@ -1,25 +1,13 @@
-[tool.black]
-line-length = 100
-target-version = ["py310"]
+[project]
+name = "chess-sut"
+version = "1.0.0"
+description = "Chess-Sut: Tactical Board Game with Adversarial AI"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pillow>=10.0.0",
+]
 
-[tool.ruff]
-line-length = 100
-target-version = "py310"
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "ANN", "N", "ERA"]
-ignore = ["ANN401"]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["ANN"]
-
-[tool.mypy]
-python_version = "3.10"
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-warn_unused_ignores = true
-ignore_missing_imports = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-filterwarnings = ["ignore::pytest.PytestUnraisableExceptionWarning"]
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

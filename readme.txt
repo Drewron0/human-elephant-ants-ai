@@ -1,82 +1,71 @@
-CHESS-SUT
-=========
+CHESS-SUT: TACTICAL BOARD GAME WITH ADVERSARIAL AI
+===================================================
 
-Game papan taktis berbasis AI untuk mata kuliah Artificial Intelligence.
-Permainan catur digabung dengan aturan suit Gajah, Orang, Semut.
+Artificial Intelligence (AFL2) Project - Semester 5
+
+Team Members:
+  - Felix Richardo (0706012410058)
+  - Vallerian Davyne Djunarko (0706012410038)
+  - Aaron Hans Adiputra (0706012410059)
 
 
-IDE PROYEK
-----------
-Bidak tidak punya tingkatan tetap. Setiap bidak mengalahkan satu jenis dan
-kalah dari satu jenis lain:
+1. PROJECT OVERVIEW
+-------------------
+Chess-Sut is a tactical board game that blends chess-like grid movement with
+the traditional Indonesian "Sut" mechanic (Elephant, Human, Ant).
 
-  - Gajah mengalahkan Orang
-  - Orang mengalahkan Semut
-  - Semut mengalahkan Gajah
+Piece capture rules:
+  - Elephant captures Human
+  - Human captures Ant
+  - Ant captures Elephant
 
-Setiap bidak bergerak satu kotak ke 8 arah. Pemain menang jika ada bidak yang
-mencapai sudut bintang lawan.
+Every piece moves one square in any of the 8 directions (orthogonal and diagonal).
+A player wins immediately when any of their pieces reaches the opponent's
+target star corner.
 
-AI memakai Minimax dengan Alpha-Beta Pruning. Nilai bidak dihitung dinamis dari
-jumlah mangsa dan predator yang tersisa, dengan fungsi evaluasi:
+
+2. ARTIFICIAL INTELLIGENCE
+--------------------------
+Because piece values are non-transitive (cyclic), static piece valuations are
+insufficient. The AI implements Minimax with Alpha-Beta Pruning and a dynamic
+evaluation function:
 
   E(s) = wm*M(s) + wc*C(s) + wp*P(s) + wt*T(s)
 
-Mode yang tersedia:
-
-  - Versus AI        : lawan komputer dengan pilihan tingkat kesulitan
-  - Tactical Puzzles : tembus AI yang bertahan
-  - Stage Editor     : buat puzzle sendiri
-  - Simulation Lab   : bandingkan performa setiap agen AI
-
-
-LIBRARY YANG DIGUNAKAN
-----------------------
-  - Python 3.10 atau lebih baru : bahasa utama (dari python.org)
-  - Tkinter                     : antarmuka, sudah termasuk di Python
-  - Pillow                      : gambar bidak, papan, tombol, dan ikon
+Where:
+  - M(s): Dynamic material value based on active prey and predator counts
+  - C(s): Control over center board squares
+  - P(s): Piece mobility and forward advancement
+  - T(s): Proximity to the goal corner (Chebyshev distance)
 
 
-CARA INSTALASI
---------------
-1. Pasang Python 3.10 atau lebih baru dari https://www.python.org/downloads/
-   Di Windows, centang "Add Python to PATH" saat instalasi.
-   Pastikan versinya benar:
+3. GAME MODES
+-------------
+  - Versus AI        : Single player match against Easy, Normal, Hard, or Alpha-Beta
+  - Tactical Puzzles : Endgame challenges to breach defensive agents
+  - Stage Editor     : Interactive tool to design and save custom puzzle stages
+  - Leaderboard      : Local record keeping for puzzle step counts and match histories
 
+
+4. INSTALLATION & SETUP
+-----------------------
+1. Ensure Python 3.10 or newer is installed:
      python --version
 
-   Di Linux, pasang Tkinter dulu:
-
-     sudo apt install python3-tk
-
-2. Buka terminal dan masuk ke folder proyek:
-
+2. Navigate to the project directory:
      cd AFL2
 
-3. Buat virtual environment.
+3. (Optional) Create and activate a virtual environment:
+     Windows:
+       python -m venv .venv
+       .venv\Scripts\activate
 
-   Windows (Command Prompt):
+     macOS/Linux:
+       python3 -m venv .venv
+       source .venv/bin/activate
 
-     python -m venv .venv
-     .venv\Scripts\activate
-
-   macOS atau Linux:
-
-     python3 -m venv .venv
-     source .venv/bin/activate
-
-4. Pasang library:
-
+4. Install dependencies:
      pip install -r requirements.txt
 
-5. Jalankan game:
-
+5. Run the game:
      python main.py
-
-   Jendela game akan terbuka di menu utama.
-
-
-CATATAN
--------
-Tidak ada variabel lingkungan yang wajib diisi. Pengaturan opsional ada di
-.env.example, dan semua parameter game ada di config/settings.py.
