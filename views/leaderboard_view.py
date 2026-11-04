@@ -36,14 +36,14 @@ class LeaderboardView(tk.Frame):
             bg=THEME['surface'],
             padx=10,
             pady=6,
-            bd=1,
-            relief=tk.SOLID,
+            bd=0,
+            relief=tk.FLAT,
             highlightbackground=THEME['border'],
             highlightthickness=1
         )
         self.pve_toolbar.pack(fill=tk.X, pady=(0, 8))
 
-        tk.Label(self.pve_toolbar, text="Difficulty:", font=(FONT_NAME, 9, "bold"),
+        tk.Label(self.pve_toolbar, text="Difficulty:", font=(FONT_NAME, 10, "bold"),
                  bg=THEME['surface'], fg=THEME['text_muted']).pack(side=tk.LEFT, padx=(0, 6))
 
         self.seg_diff = SegmentedControl(
@@ -54,7 +54,7 @@ class LeaderboardView(tk.Frame):
         )
         self.seg_diff.pack(side=tk.LEFT, padx=(0, 16))
 
-        tk.Label(self.pve_toolbar, text="Sort By:", font=(FONT_NAME, 9, "bold"),
+        tk.Label(self.pve_toolbar, text="Sort By:", font=(FONT_NAME, 10, "bold"),
                  bg=THEME['surface'], fg=THEME['text_muted']).pack(side=tk.LEFT, padx=(0, 6))
 
         self.seg_sort = SegmentedControl(
@@ -69,8 +69,8 @@ class LeaderboardView(tk.Frame):
         self.table_card = tk.Frame(
             container,
             bg=THEME['surface'],
-            bd=1,
-            relief=tk.SOLID,
+            bd=0,
+            relief=tk.FLAT,
             highlightbackground=THEME['border'],
             highlightthickness=1
         )

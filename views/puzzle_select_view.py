@@ -97,26 +97,26 @@ class PuzzleSelectView(tk.Frame):
         bind_mousewheel(sidebar_scroll_canvas, sidebar_scroll_canvas)
 
         # Selected stage info card
-        self.card_info = tk.Frame(content, bg=THEME['surface_light'], padx=12, pady=10, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
+        self.card_info = tk.Frame(content, bg=THEME['surface_light'], padx=12, pady=10, bd=0, relief=tk.FLAT, highlightbackground=THEME['border'], highlightthickness=1)
         self.card_info.pack(fill=tk.X, pady=(0, 10))
 
         self.lbl_selected_title = tk.Label(self.card_info, text="Selected Stage", font=(FONT_NAME, 11, "bold"), bg=THEME['surface_light'], fg=THEME['text'])
         self.lbl_selected_title.pack(anchor="w")
 
-        self.lbl_selected_desc = tk.Label(self.card_info, text="Stage description...", font=(FONT_NAME, 8), bg=THEME['surface_light'], fg=THEME['text_muted'], wraplength=270, justify="left")
+        self.lbl_selected_desc = tk.Label(self.card_info, text="Stage description...", font=(FONT_NAME, 9), bg=THEME['surface_light'], fg=THEME['text_muted'], wraplength=270, justify="left")
         self.lbl_selected_desc.pack(anchor="w", pady=(3, 6))
 
-        self.lbl_selected_stats = tk.Label(self.card_info, text="", font=(FONT_NAME, 8, "bold"), bg=THEME['surface_light'], fg=THEME['accent'], wraplength=270, justify="left")
+        self.lbl_selected_stats = tk.Label(self.card_info, text="", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_light'], fg=THEME['accent'], wraplength=270, justify="left")
         self.lbl_selected_stats.pack(anchor="w")
 
         # Player profile selector
-        tk.Label(content, text="Player Profile:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(4, 2))
+        tk.Label(content, text="Player Profile:", font=(FONT_NAME, 10, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(4, 2))
         self.var_player_name = tk.StringVar(value=storage.get_last_username())
-        cb_player = ttk.Combobox(content, textvariable=self.var_player_name, values=storage.get_recent_profiles(), width=24, font=(FONT_NAME, 9))
+        cb_player = ttk.Combobox(content, textvariable=self.var_player_name, values=storage.get_recent_profiles(), width=24, font=(FONT_NAME, 10))
         cb_player.pack(fill=tk.X, pady=(0, 4))
 
         # AI model selector
-        tk.Label(content, text="AI Defender Model:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(4, 2))
+        tk.Label(content, text="AI Defender Model:", font=(FONT_NAME, 10, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(4, 2))
         self.var_ai_model = tk.StringVar(value="Exact Defender (best defense)")
         cb_model = ttk.Combobox(
             content,
@@ -127,15 +127,15 @@ class PuzzleSelectView(tk.Frame):
                 "Practice: Random Move Agent"
             ],
             state="readonly",
-            font=(FONT_NAME, 9)
+            font=(FONT_NAME, 10)
         )
         cb_model.pack(fill=tk.X, pady=(0, 10))
         tk.Label(content, text="Exact Defender follows proven best replies. Practice baselines can play weaker moves.",
-                 font=(FONT_NAME, 8), bg=THEME['surface'], fg=THEME['text_muted'],
+                 font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['text_muted'],
                  wraplength=270, justify="left").pack(anchor="w", pady=(0, 8))
 
         # Show search metrics toggle
-        metrics_box = tk.Frame(content, bg=THEME['surface_card'], padx=8, pady=6, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
+        metrics_box = tk.Frame(content, bg=THEME['surface_card'], padx=8, pady=6, bd=0, relief=tk.FLAT, highlightbackground=THEME['border'], highlightthickness=1)
         metrics_box.pack(fill=tk.X, pady=(0, 12))
 
         self.var_show_metrics = tk.BooleanVar(value=False)
@@ -143,7 +143,7 @@ class PuzzleSelectView(tk.Frame):
             metrics_box,
             text="Show AI Search Metrics During Game",
             variable=self.var_show_metrics,
-            font=(FONT_NAME, 8, "bold"),
+            font=(FONT_NAME, 9, "bold"),
             bg=THEME['surface_card'],
             fg=THEME['text'],
             selectcolor=THEME['surface_light'],
@@ -155,7 +155,7 @@ class PuzzleSelectView(tk.Frame):
         tk.Label(
             metrics_box,
             text="Keep disabled to avoid move spoilers during gameplay.",
-            font=(FONT_NAME, 8),
+            font=(FONT_NAME, 9),
             bg=THEME['surface_card'],
             fg=THEME['text_muted']
         ).pack(anchor="w", padx=(18, 0))
@@ -169,8 +169,8 @@ class PuzzleSelectView(tk.Frame):
         ButtonDanger(self.frame_custom_actions, text="Delete", command=self._delete_selected_stage).pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(2, 0))
 
         # Stage leaderboard box
-        tk.Label(content, text="Stage Leaderboard (Best Records):", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(6, 4))
-        self.box_leaderboard = tk.Frame(content, bg=THEME['surface_light'], padx=8, pady=6, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
+        tk.Label(content, text="Stage Leaderboard (Best Records):", font=(FONT_NAME, 10, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(6, 4))
+        self.box_leaderboard = tk.Frame(content, bg=THEME['surface_light'], padx=8, pady=6, bd=0, relief=tk.FLAT, highlightbackground=THEME['border'], highlightthickness=1)
         self.box_leaderboard.pack(fill=tk.X)
 
 
@@ -201,8 +201,8 @@ class PuzzleSelectView(tk.Frame):
             card = tk.Frame(
                 self.scrollable_grid,
                 bg=THEME['surface_card'],
-                bd=1,
-                relief=tk.SOLID,
+                bd=0,
+                relief=tk.FLAT,
                 highlightbackground=THEME['border'],
                 highlightthickness=1,
                 padx=8,
@@ -217,11 +217,11 @@ class PuzzleSelectView(tk.Frame):
             target = (0, puzzle.board_size - 1)
             draw_board_thumbnail(thumb_canvas, puzzle.board_size, puzzle.pieces, target, width=130, height=130)
 
-            lbl_title = tk.Label(card, text=puzzle.title, font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=THEME['text'], wraplength=130, justify="center")
+            lbl_title = tk.Label(card, text=puzzle.title, font=(FONT_NAME, 10, "bold"), bg=THEME['surface_card'], fg=THEME['text'], wraplength=130, justify="center")
             lbl_title.pack(anchor="center", fill=tk.X)
 
             minimum = f"Min: {puzzle.s_optimal} steps" if puzzle.s_optimal is not None else "Minimum not set"
-            lbl_sub = tk.Label(card, text=f"{puzzle.board_size}x{puzzle.board_size} | {minimum}", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'], justify="center")
+            lbl_sub = tk.Label(card, text=f"{puzzle.board_size}x{puzzle.board_size} | {minimum}", font=(FONT_NAME, 9), bg=THEME['surface_card'], fg=THEME['text_muted'], justify="center")
             lbl_sub.pack(anchor="center", fill=tk.X, pady=(2, 0))
 
             def bind_click(w, p_id=puzzle.id):
@@ -287,7 +287,7 @@ class PuzzleSelectView(tk.Frame):
             tk.Label(
                 self.box_leaderboard,
                 text="No records yet for this stage. Be the first to solve it!",
-                font=(FONT_NAME, 8, "italic"),
+                font=(FONT_NAME, 9, "italic"),
                 bg=THEME['surface_light'],
                 fg=THEME['text_muted']
             ).pack(anchor="w")
@@ -304,7 +304,7 @@ class PuzzleSelectView(tk.Frame):
             tk.Label(
                 row,
                 text=f"{idx}. {name}",
-                font=(FONT_NAME, 8, "bold" if idx == 1 else "normal"),
+                font=(FONT_NAME, 9, "bold" if idx == 1 else "normal"),
                 bg=THEME['surface_light'],
                 fg=THEME['text']
             ).pack(side=tk.LEFT)
@@ -312,7 +312,7 @@ class PuzzleSelectView(tk.Frame):
             tk.Label(
                 row,
                 text=f"{steps} moves | {undos}u",
-                font=(FONT_NAME, 8),
+                font=(FONT_NAME, 9),
                 bg=THEME['surface_light'],
                 fg=THEME['accent'] if idx == 1 else THEME['text_muted']
             ).pack(side=tk.RIGHT)
@@ -332,7 +332,7 @@ class PuzzleSelectView(tk.Frame):
         tk.Label(
             modal.body,
             text="Are you sure you want to delete this custom stage permanently?",
-            font=(FONT_NAME, 9),
+            font=(FONT_NAME, 10),
             bg=THEME['surface'],
             fg=THEME['text']
         ).pack(pady=10)

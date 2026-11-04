@@ -3,7 +3,7 @@ from tkinter import ttk
 from typing import Dict, Any, Optional, Tuple, List
 from ui_theme import (
     THEME, FONT_NAME, HOTKEYS, ButtonPrimary, ButtonSecondary, ButtonDanger,
-    ThemedModal, draw_star, bind_mousewheel, draw_piece_image
+    ThemedModal, draw_star, bind_mousewheel, draw_piece_image, CaptureLegend
 )
 from game_logic import GameState, Piece, TARGET_CORNERS
 from ai_engine import get_ai_move_with_delay
@@ -39,12 +39,11 @@ class GameView(tk.Frame):
 
     def _build_ui(self):
         # Top objective reminder bar
-        top_bar = tk.Frame(self, bg=THEME['surface'], height=36, bd=1, relief=tk.SOLID,
-                           highlightbackground=THEME['border'], highlightthickness=1)
+        top_bar = tk.Frame(self, bg=THEME['surface'], bd=0)
         top_bar.pack(fill=tk.X, padx=16, pady=(10, 6))
 
-        goal_text = "Objective: Move any piece into your opponent's star corner. P1 targets I9 (top-right), P2 targets A1 (bottom-left)."
-        tk.Label(top_bar, text=goal_text, font=(FONT_NAME, 9, "bold"),
+        goal_text = "Reach the star corner. You: I9 (top-right) · Opponent: A1 (bottom-left)"
+        tk.Label(top_bar, text=goal_text, font=(FONT_NAME, 10),
                  bg=THEME['surface'], fg=THEME['text']).pack(side=tk.LEFT, padx=16, pady=6)
 
         ButtonSecondary(top_bar, text="How to Play", command=self._show_rules_modal).pack(side=tk.RIGHT, padx=10, pady=4)
@@ -61,10 +60,10 @@ class GameView(tk.Frame):
         self.canvas_card = tk.Frame(
             self.board_container,
             bg=THEME['surface'],
-            bd=1,
-            relief=tk.SOLID,
+            bd=0,
+            relief=tk.FLAT,
             highlightbackground=THEME['border'],
-            highlightthickness=1,
+            highlightthickness=0,
             padx=6,
             pady=6
         )
@@ -75,8 +74,17 @@ class GameView(tk.Frame):
         self.canvas.bind("<Button-1>", self._on_board_click)
 
         # Controls Panel (Right, Resizable)
-        right_panel = tk.Frame(self.paned, bg=THEME['surface'], bd=0, padx=16, pady=14)
-        self.paned.add(right_panel, minsize=320, stretch="never")
+        sidebar = tk.Frame(self.paned, bg=THEME['surface'])
+        self.paned.add(sidebar, minsize=340, stretch="never")
+        scroll_canvas = tk.Canvas(sidebar, bg=THEME['surface'], highlightthickness=0)
+        scroll_y = ttk.Scrollbar(sidebar, orient=tk.VERTICAL, command=scroll_canvas.yview)
+        right_panel = tk.Frame(scroll_canvas, bg=THEME['surface'], padx=16, pady=14)
+        panel_window = scroll_canvas.create_window((0, 0), window=right_panel, anchor='nw')
+        right_panel.bind('<Configure>', lambda event: scroll_canvas.configure(scrollregion=scroll_canvas.bbox('all')))
+        scroll_canvas.bind('<Configure>', lambda event: scroll_canvas.itemconfigure(panel_window, width=event.width))
+        scroll_canvas.configure(yscrollcommand=scroll_y.set)
+        scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
+        scroll_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # Opponent Card
         p2_title = self.config.get('p2_name', 'Player 2')
@@ -85,8 +93,10 @@ class GameView(tk.Frame):
 
         self.card_p2 = tk.Frame(right_panel, bg=THEME['surface_light'], padx=12, pady=8)
         self.card_p2.pack(fill=tk.X, pady=(0, 6))
+        tk.Label(self.card_p2, text='●', font=(FONT_NAME, 12),
+                 bg=THEME['surface_light'], fg=self.config.get('p2_color', '#FF453A')).pack(side=tk.LEFT, padx=(0, 8))
         self.lbl_p2_name = tk.Label(self.card_p2, text=p2_title, font=(FONT_NAME, 10, "bold"),
-                                    bg=THEME['surface_light'], fg=self.config.get('p2_color'))
+                                    bg=THEME['surface_light'], fg=THEME['text'])
         self.lbl_p2_name.pack(side=tk.LEFT)
         self.lbl_p2_timer = tk.Label(self.card_p2, text=self._format_time(self.time_p2),
                                      font=(FONT_NAME, 12, "bold"), bg=THEME['surface_light'], fg=THEME['text'])
@@ -97,8 +107,10 @@ class GameView(tk.Frame):
 
         self.card_p1 = tk.Frame(right_panel, bg=THEME['surface_light'], padx=12, pady=8)
         self.card_p1.pack(fill=tk.X, pady=(0, 10))
+        tk.Label(self.card_p1, text='●', font=(FONT_NAME, 12),
+                 bg=THEME['surface_light'], fg=self.config.get('p1_color', '#30D158')).pack(side=tk.LEFT, padx=(0, 8))
         self.lbl_p1_name = tk.Label(self.card_p1, text=p1_title, font=(FONT_NAME, 10, "bold"),
-                                    bg=THEME['surface_light'], fg=self.config.get('p1_color'))
+                                    bg=THEME['surface_light'], fg=THEME['text'])
         self.lbl_p1_name.pack(side=tk.LEFT)
         self.lbl_p1_timer = tk.Label(self.card_p1, text=self._format_time(self.time_p1),
                                      font=(FONT_NAME, 12, "bold"), bg=THEME['surface_light'], fg=THEME['text'])
@@ -110,15 +122,17 @@ class GameView(tk.Frame):
         self.lbl_turn = tk.Label(metrics_frame, text="Turn: Player 1", font=(FONT_NAME, 11, "bold"),
                                  bg=THEME['surface'], fg=THEME['text'])
         self.lbl_turn.pack(side=tk.LEFT)
-        self.lbl_stats = tk.Label(metrics_frame, text="Turns: 0 | Undos: 0", font=(FONT_NAME, 9),
+        self.lbl_stats = tk.Label(metrics_frame, text="Turns: 0 | Undos: 0", font=(FONT_NAME, 10),
                                   bg=THEME['surface'], fg=THEME['text_muted'])
         self.lbl_stats.pack(side=tk.RIGHT)
 
+        CaptureLegend(right_panel).pack(fill=tk.X, pady=(4, 16))
+
         # Move History (FIXED HEIGHT, NOT OVERSIZED)
-        tk.Label(right_panel, text="Move History:", font=(FONT_NAME, 9, "bold"),
+        tk.Label(right_panel, text="Move History:", font=(FONT_NAME, 10, "bold"),
                  bg=THEME['surface'], fg=THEME['text_muted']).pack(anchor="w")
 
-        notation_container = tk.Frame(right_panel, bg=THEME['surface_light'], height=160)
+        notation_container = tk.Frame(right_panel, bg=THEME['surface_light'], height=96)
         notation_container.pack(fill=tk.X, pady=(4, 10))
         notation_container.pack_propagate(False)
 
@@ -126,9 +140,9 @@ class GameView(tk.Frame):
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.list_notation = tk.Listbox(
             notation_container,
-            bg='#18181A',
+            bg=THEME['surface_card'],
             fg=THEME['text'],
-            font=(FONT_NAME, 9),
+            font=(FONT_NAME, 10),
             bd=0,
             yscrollcommand=scroll.set,
             selectbackground=THEME['accent']
@@ -172,12 +186,8 @@ class GameView(tk.Frame):
         btn_frame.columnconfigure(0, weight=1)
         btn_frame.columnconfigure(1, weight=1)
 
-        # Hotkeys footer
-        hotkeys_bar = tk.Frame(right_panel, bg=THEME['surface'])
-        hotkeys_bar.pack(fill=tk.X, pady=(10, 0))
-        hk_text = " | ".join([f"{v['key_str']}: {v['label']}" for v in HOTKEYS.values()])
-        tk.Label(hotkeys_bar, text=hk_text, font=(FONT_NAME, 8),
-                 bg=THEME['surface'], fg=THEME['text_muted']).pack()
+        bind_mousewheel(right_panel, scroll_canvas)
+        bind_mousewheel(self.list_notation, self.list_notation)
 
         self._draw_board()
         self._update_ui_state()
@@ -236,12 +246,12 @@ class GameView(tk.Frame):
         for c in range(size):
             x = c * sq_size + sq_size // 2
             y = board_dim + 15
-            self.canvas.create_text(x, y, text=chr(65 + c), font=(FONT_NAME, 9, "bold"), fill=THEME['text_muted'])
+            self.canvas.create_text(x, y, text=chr(65 + c), font=(FONT_NAME, 10, "bold"), fill=THEME['text_muted'])
 
         for r in range(size):
             x = board_dim + 15
             y = r * sq_size + sq_size // 2
-            self.canvas.create_text(x, y, text=str(size - r), font=(FONT_NAME, 9, "bold"), fill=THEME['text_muted'])
+            self.canvas.create_text(x, y, text=str(size - r), font=(FONT_NAME, 10, "bold"), fill=THEME['text_muted'])
 
         # Draw Cells
         for r in range(size):
@@ -382,9 +392,7 @@ class GameView(tk.Frame):
         self._draw_board()
 
         p_name = self.config.get('p1_name') if self.state.current_turn == 0 else self.config.get('p2_name')
-        color = self.config.get('p1_color') if self.state.current_turn == 0 else self.config.get('p2_color')
-
-        self.lbl_turn.config(text=f"Turn: {p_name}", fg=color)
+        self.lbl_turn.config(text=f"Turn: {p_name}", fg=THEME['text'])
 
         self.lbl_stats.config(text=f"Turns: {self.state.total_turns} | Undos: {self.state.undos_p1}")
 
@@ -445,8 +453,6 @@ class GameView(tk.Frame):
         self._stop_timer()
 
         winner_name = self.config.get('p1_name') if winner == 0 else self.config.get('p2_name')
-        win_color = self.config.get('p1_color') if winner == 0 else self.config.get('p2_color')
-
         if winner == 0:
             storage.save_pve_score(
                 username=self.config.get('p1_name', 'Player'),
@@ -461,7 +467,7 @@ class GameView(tk.Frame):
             text=f"{winner_name} Wins",
             font=(FONT_NAME, 16, "bold"),
             bg=THEME['surface'],
-            fg=win_color
+            fg=THEME['text']
         ).pack(pady=(6, 4))
 
         tk.Label(
@@ -477,11 +483,11 @@ class GameView(tk.Frame):
 
         stats_str = f"Turns: {self.state.total_turns} | Undos: {self.state.undos_p1}"
 
-        tk.Label(info_box, text=stats_str, font=(FONT_NAME, 9), bg=THEME['surface_light'], fg=THEME['text']).pack()
+        tk.Label(info_box, text=stats_str, font=(FONT_NAME, 10), bg=THEME['surface_light'], fg=THEME['text']).pack()
 
         if self.config.get('time_limit', 120) > 0:
             rem = self.time_p1 if winner == 0 else self.time_p2
-            tk.Label(info_box, text=f"Time Remaining: {self._format_time(rem)}", font=(FONT_NAME, 9),
+            tk.Label(info_box, text=f"Time Remaining: {self._format_time(rem)}", font=(FONT_NAME, 10),
                      bg=THEME['surface_light'], fg=THEME['text_muted']).pack(pady=(2, 0))
 
         def on_rematch():
@@ -619,7 +625,7 @@ class GameView(tk.Frame):
         tk.Label(
             modal.body,
             text=content,
-            font=(FONT_NAME, 9),
+            font=(FONT_NAME, 10),
             bg=THEME['surface'],
             fg=THEME['text'],
             justify="left"

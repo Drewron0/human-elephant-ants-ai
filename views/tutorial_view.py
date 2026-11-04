@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
-from ui_theme import THEME, FONT_NAME, ButtonSecondary
+from ui_theme import THEME, FONT_NAME, ButtonSecondary, CaptureLegend, bind_mousewheel
 
 
 class TutorialView(tk.Frame):
@@ -33,8 +33,8 @@ class TutorialView(tk.Frame):
         scroll_card = tk.Frame(
             container,
             bg=THEME["surface"],
-            bd=1,
-            relief=tk.SOLID,
+            bd=0,
+            relief=tk.FLAT,
             highlightbackground=THEME["border"],
             highlightthickness=1,
         )
@@ -44,29 +44,23 @@ class TutorialView(tk.Frame):
         scrollbar = ttk.Scrollbar(scroll_card, orient=tk.VERTICAL, command=canvas.yview)
         content_frame = tk.Frame(canvas, bg=THEME["surface"], padx=24, pady=18)
 
-        content_frame.bind(
-            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-
-        canvas.create_window((0, 0), window=content_frame, anchor="nw")
+        content_window = canvas.create_window((0, 0), window=content_frame, anchor="nw")
+        canvas.bind('<Configure>', lambda event: canvas.itemconfigure(content_window, width=event.width))
         canvas.configure(yscrollcommand=scrollbar.set)
 
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
+        CaptureLegend(content_frame).pack(fill=tk.X, pady=(0, 24))
+
         guide_text = (
-            "1. Primary Victory Condition:\n"
+            "Victory condition\n"
             "   Move any of your pieces into your opponent's designated star corner.\n"
             "   Player 1 (starts at bottom): Target corner is I9 (top-right).\n"
             "   Player 2 (starts at top): Target corner is A1 (bottom-left).\n"
             "   Reaching the target corner results in immediate victory.\n\n"
-            "2. Combat Hierarchy (Cyclic Dominance):\n"
-            "   Human (H) captures Ant (A).\n"
-            "   Ant (A) captures Elephant (E).\n"
-            "   Elephant (E) captures Human (H).\n"
-            "   Matching pieces (for example H vs H) cannot capture each other and movement is blocked.\n"
             "   Friendly fire is illegal: You can never capture or land on your own pieces.\n\n"
-            "3. Movement Mechanics:\n"
+            "Movement\n"
             "   Every piece moves exactly 1 square per turn in any of the 8 adjacent directions (orthogonal or diagonal).\n"
             "   Valid moves to empty squares are displayed as black dots.\n"
             "   Valid capture moves highlight the target square completely red.\n\n"
@@ -79,31 +73,29 @@ class TutorialView(tk.Frame):
             "   Exact Defender analyzes its replies separately and does not change the entered minimum.\n"
             "   If analysis is incomplete, it pauses: Retry, Undo or Reset. It never substitutes a guessed move.\n"
             "   Practice baseline models deliberately use weaker, approximate or random decisions.\n\n"
-            "5. Simulation & Benchmark Lab:\n"
+            "Simulation & benchmark lab\n"
             "   Compare optimized search at d=6 and d=3, Baseline 2 (Vanilla Minimax d=3),\n"
             "   and Baseline 1 (Random Agent) against scripted players (Shortest-Path, Sub-Optimal, Random).\n"
             "   Default: 1,000 games per combination on certified random 11x11 10-step race puzzles.\n"
             "   Records turn latency, actual depth, timeouts, pruning efficiency, delay margin, and neutralization rate.\n\n"
-            "6. Hotkeys:\n"
+            "Keyboard shortcuts\n"
             "   Ctrl + Z undoes a move; Ctrl + R restarts a puzzle.\n"
             "   Ctrl + E: Surrender / Concede match\n"
             "   Ctrl + S: Save mid-game state to a save slot"
         )
 
-        tk.Label(
+        guide = tk.Label(
             content_frame,
             text=guide_text,
-            font=(FONT_NAME, 10),
+            font=(FONT_NAME, 11),
             bg=THEME["surface"],
             fg=THEME["text"],
             justify="left",
             wraplength=760,
-        ).pack(anchor="w")
+        )
+        guide.pack(anchor="w")
+        content_frame.bind('<Configure>', lambda event: (
+            canvas.configure(scrollregion=canvas.bbox('all')),
+            guide.configure(wraplength=max(1, min(760, event.width - 48)))))
+        bind_mousewheel(scroll_card, canvas)
 
-        # Fixed Bottom Footer with second Back to Hub Button
-        footer = tk.Frame(container, bg=THEME["bg"])
-        footer.pack(fill=tk.X, pady=(12, 0))
-
-        # ButtonSecondary(
-        #     footer, text="Back to Main Menu", command=lambda: self.app.show_view("menu")
-        # ).pack(side=tk.RIGHT)

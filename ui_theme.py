@@ -5,35 +5,38 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Callable, List, Optional, Any, Tuple
 from PIL import Image, ImageTk
+from game_logic import BEATS, PIECE_NAMES
 
 # Restrained system typography adhering to Apple Design guidelines
 FONT_NAME = "Segoe UI"
 
-# Apple Design System Dark Palette: restrained, subtle depth, high legibility
+# Light semantic surfaces keep boards, forms and dialogs in one appearance.
 THEME = {
-    'bg': '#121214',
-    'surface': '#1C1C1E',
-    'surface_light': '#2C2C2E',
-    'surface_card': '#242426',
-    'border': '#38383A',
-    'border_subtle': '#262628',
-    'text': '#F2F2F7',
-    'text_muted': '#8E8E93',
-    'accent': '#0A84FF',
-    'accent_hover': '#0071E3',
-    'danger': '#FF453A',
-    'danger_hover': '#D70015',
-    'success': '#30D158',
-    'warning': '#FF9F0A',
-    'board_light': '#E5E5EA',
-    'board_dark': '#AEAEB2',
-    'board_grid': '#636366',
-    'corner_p1': '#FFE082',
-    'corner_p2': '#FFCDD2',
-    'move_dot': '#1C1C1E',
-    'capture_square': '#FF453A',
-    'select_square': '#FFE082',
-    'last_move': '#D1D1D6'
+    'bg': '#F4F5F7',
+    'surface': '#FFFFFF',
+    'surface_light': '#ECEEF2',
+    'surface_card': '#F7F8FA',
+    'border': '#D7DAE0',
+    'border_subtle': '#E8EAEE',
+    'text': '#202124',
+    'text_muted': '#60636B',
+    'accent': '#0066CC',
+    'accent_hover': '#0055AA',
+    'danger': '#B42318',
+    'danger_hover': '#8F1D14',
+    'danger_soft': '#FCECEB',
+    'success': '#237A43',
+    'warning': '#8C5B00',
+    'backdrop': '#DDE0E6',
+    'board_light': '#F3F5F8',
+    'board_dark': '#D3DAE4',
+    'board_grid': '#BEC7D3',
+    'corner_p1': '#FBE7AB',
+    'corner_p2': '#F8D6D2',
+    'move_dot': '#303F50',
+    'capture_square': '#F3B6B0',
+    'select_square': '#A7CCF5',
+    'last_move': '#DCE9F8'
 }
 
 COLOR_PALETTES = {
@@ -55,8 +58,22 @@ HOTKEYS = {
 def setup_ttk_styles(root: tk.Tk):
     style = ttk.Style(root)
     style.theme_use('clam')
+    root.option_add('*Font', (FONT_NAME, 10))
+    root.option_add('*Entry.background', THEME['surface_light'])
+    root.option_add('*Entry.foreground', THEME['text'])
+    root.option_add('*Entry.insertBackground', THEME['text'])
+    root.option_add('*Entry.selectBackground', THEME['accent'])
+    root.option_add('*Entry.selectForeground', '#FFFFFF')
+    root.option_add('*Entry.highlightColor', THEME['accent'])
+    root.option_add('*Entry.highlightBackground', THEME['border'])
+    root.option_add('*Entry.highlightThickness', 1)
+    root.option_add('*Listbox.highlightThickness', 0)
+    root.option_add('*TCombobox*Listbox.background', THEME['surface'])
+    root.option_add('*TCombobox*Listbox.foreground', THEME['text'])
+    root.option_add('*TCombobox*Listbox.selectBackground', THEME['accent'])
+    root.option_add('*TCombobox*Listbox.selectForeground', '#FFFFFF')
 
-    # Dark Combobox Styling
+    # Combobox and popup colors use the same light appearance.
     style.configure(
         'TCombobox',
         background=THEME['surface_light'],
@@ -66,31 +83,34 @@ def setup_ttk_styles(root: tk.Tk):
         lightcolor=THEME['border'],
         bordercolor=THEME['border'],
         arrowcolor=THEME['text'],
-        padding=5
+        padding=8
     )
     style.map(
         'TCombobox',
         fieldbackground=[('readonly', THEME['surface_light']), ('focus', THEME['surface_light'])],
         foreground=[('readonly', THEME['text'])],
-        background=[('readonly', THEME['surface_light'])]
+        background=[('readonly', THEME['surface_light'])],
+        bordercolor=[('focus', THEME['accent'])],
+        selectbackground=[('readonly', THEME['surface_light'])],
+        selectforeground=[('readonly', THEME['text'])]
     )
 
-    # Dark Treeview Styling
+    # Tables use space and alignment rather than heavy header bands.
     style.configure(
         'Treeview',
         background=THEME['surface'],
         foreground=THEME['text'],
         fieldbackground=THEME['surface'],
-        rowheight=28,
-        font=(FONT_NAME, 9),
+        rowheight=36,
+        font=(FONT_NAME, 10),
         borderwidth=0
     )
     style.configure(
         'Treeview.Heading',
-        background=THEME['surface_light'],
-        foreground=THEME['text'],
-        font=(FONT_NAME, 9, 'bold'),
-        borderwidth=1,
+        background=THEME['surface'],
+        foreground=THEME['text_muted'],
+        font=(FONT_NAME, 10, 'bold'),
+        borderwidth=0,
         relief=tk.FLAT
     )
     style.map(
@@ -99,7 +119,10 @@ def setup_ttk_styles(root: tk.Tk):
         foreground=[('selected', '#FFFFFF')]
     )
 
-    # Dark Scrollbar Styling
+    style.configure('TProgressbar', background=THEME['accent'],
+                    troughcolor=THEME['surface_light'], borderwidth=0)
+
+    # Neutral scrollbars recede behind the content.
     style.configure(
         'Vertical.TScrollbar',
         background=THEME['surface_light'],
@@ -150,6 +173,32 @@ def draw_piece_image(canvas: tk.Canvas, cx: int, cy: int, piece_type: str, size:
         image.thumbnail((size, size), Image.Resampling.LANCZOS)
         canvas._piece_images[piece_type] = ImageTk.PhotoImage(image, master=canvas)
     canvas.create_image(cx, cy, image=canvas._piece_images[piece_type])
+
+
+class CaptureLegend(tk.Frame):
+    """Show the actual capture cycle with the same artwork as the board."""
+    def __init__(self, parent):
+        bg = parent.cget('bg')
+        super().__init__(parent, bg=bg)
+        tk.Label(self, text='Legend', font=(FONT_NAME, 12, 'bold'),
+                 bg=bg, fg=THEME['text']).pack(anchor='w', pady=(0, 8))
+        for attacker, target in BEATS.items():
+            row = tk.Frame(self, bg=bg)
+            row.pack(fill=tk.X, pady=2)
+            art = tk.Canvas(row, width=36, height=36, bg=bg, highlightthickness=0)
+            art.pack(side=tk.LEFT)
+            draw_piece_image(art, 18, 18, attacker, 32)
+            tk.Label(row, text=f'{PIECE_NAMES[attacker]} beats {PIECE_NAMES[target]}',
+                     font=(FONT_NAME, 10), bg=bg, fg=THEME['text']).pack(
+                         side=tk.LEFT, padx=8)
+            target_art = tk.Canvas(row, width=36, height=36, bg=bg, highlightthickness=0)
+            target_art.pack(side=tk.LEFT)
+            draw_piece_image(target_art, 18, 18, target, 32)
+        note = tk.Label(self, text='Same types cannot capture each other.',
+                        font=(FONT_NAME, 9), bg=bg, fg=THEME['text_muted'],
+                        justify=tk.LEFT, anchor='w')
+        note.pack(fill=tk.X, pady=(8, 0))
+        self.bind('<Configure>', lambda event: note.config(wraplength=max(1, event.width)))
 
 
 def draw_board_thumbnail(canvas: tk.Canvas, board_size: int, pieces: List[Tuple[int, int, int, str]],
@@ -233,13 +282,22 @@ def bind_mousewheel(widget: tk.Widget, scroll_target: tk.Widget) -> None:
     _bind_recursive(widget)
 
 
+def _button_feedback(button: tk.Button, hover: str):
+    normal = button.cget('bg')
+    button.configure(highlightthickness=2, highlightbackground=normal,
+                     highlightcolor=THEME['accent'], disabledforeground=THEME['text_muted'])
+    button.bind('<Enter>', lambda event: button.configure(bg=hover)
+                if str(button.cget('state')) != tk.DISABLED else None)
+    button.bind('<Leave>', lambda event: button.configure(bg=normal))
+
+
 class ButtonPrimary(tk.Button):
     def __init__(self, parent, text: str, command: Optional[Callable] = None, width: Optional[int] = None, **kwargs):
         super().__init__(
             parent,
             text=text,
             command=command,
-            font=(FONT_NAME, 9),
+            font=(FONT_NAME, 10),
             bg=THEME['accent'],
             fg='#FFFFFF',
             activebackground=THEME['accent_hover'],
@@ -247,11 +305,12 @@ class ButtonPrimary(tk.Button):
             bd=0,
             relief=tk.FLAT,
             cursor='hand2',
-            padx=12,
-            pady=6,
+            padx=16,
+            pady=10,
             width=width,
             **kwargs
         )
+        _button_feedback(self, THEME['accent_hover'])
 
 
 class ButtonSecondary(tk.Button):
@@ -260,7 +319,7 @@ class ButtonSecondary(tk.Button):
             parent,
             text=text,
             command=command,
-            font=(FONT_NAME, 9),
+            font=(FONT_NAME, 10),
             bg=THEME['surface_light'],
             fg=THEME['text'],
             activebackground=THEME['border'],
@@ -268,11 +327,12 @@ class ButtonSecondary(tk.Button):
             bd=0,
             relief=tk.FLAT,
             cursor='hand2',
-            padx=12,
-            pady=6,
+            padx=16,
+            pady=10,
             width=width,
             **kwargs
         )
+        _button_feedback(self, THEME['border'])
 
 
 class ButtonDanger(tk.Button):
@@ -281,25 +341,26 @@ class ButtonDanger(tk.Button):
             parent,
             text=text,
             command=command,
-            font=(FONT_NAME, 9),
-            bg=THEME['danger'],
-            fg='#FFFFFF',
-            activebackground=THEME['danger_hover'],
+            font=(FONT_NAME, 10),
+            bg=THEME['danger_soft'],
+            fg=THEME['danger'],
+            activebackground=THEME['danger'],
             activeforeground='#FFFFFF',
             bd=0,
             relief=tk.FLAT,
             cursor='hand2',
-            padx=12,
-            pady=6,
+            padx=16,
+            pady=10,
             width=width,
             **kwargs
         )
+        _button_feedback(self, THEME['danger_soft'])
 
 
 class SegmentedControl(tk.Frame):
     """Clean custom segmented button group with Apple-like pill aesthetics."""
     def __init__(self, parent, options: List[Tuple[str, str]], default_val: str, on_change: Optional[Callable[[str], None]] = None):
-        super().__init__(parent, bg=THEME['surface_card'], bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
+        super().__init__(parent, bg=THEME['surface_light'], bd=0)
         self.options = options
         self.selected_val = default_val
         self.on_change = on_change
@@ -309,12 +370,13 @@ class SegmentedControl(tk.Frame):
             btn = tk.Button(
                 self,
                 text=text,
-                font=(FONT_NAME, 9),
+                font=(FONT_NAME, 10),
                 bd=0,
                 relief=tk.FLAT,
                 cursor='hand2',
                 padx=12,
-                pady=4,
+                pady=8,
+                highlightcolor=THEME['accent'],
                 command=lambda v=val: self.select(v)
             )
             btn.pack(side=tk.LEFT, padx=1, pady=1)
@@ -331,9 +393,9 @@ class SegmentedControl(tk.Frame):
     def _refresh(self):
         for val, btn in self.buttons.items():
             if val == self.selected_val:
-                btn.config(bg=THEME['accent'], fg='#FFFFFF', activebackground=THEME['accent'], activeforeground='#FFFFFF')
+                btn.config(bg=THEME['surface'], fg=THEME['text'], activebackground=THEME['surface'], activeforeground=THEME['text'], relief=tk.SUNKEN)
             else:
-                btn.config(bg=THEME['surface_card'], fg=THEME['text_muted'], activebackground=THEME['border'], activeforeground=THEME['text'])
+                btn.config(bg=THEME['surface_light'], fg=THEME['text_muted'], activebackground=THEME['border'], activeforeground=THEME['text'], relief=tk.FLAT)
 
     def get(self) -> str:
         return self.selected_val
@@ -345,17 +407,17 @@ class ThemedModal(tk.Frame):
     the header and footer buttons are never cutoff on any screen resolution.
     """
     def __init__(self, parent, title: str, min_width: int = 460):
-        super().__init__(parent, bg='#000000')
+        super().__init__(parent, bg=THEME['backdrop'])
         self.place(relx=0, rely=0, relwidth=1, relheight=1)
 
-        self.backdrop = tk.Frame(self, bg='#0E0E10')
+        self.backdrop = tk.Frame(self, bg=THEME['backdrop'])
         self.backdrop.place(relx=0, rely=0, relwidth=1, relheight=1)
 
         self.card = tk.Frame(
             self.backdrop,
             bg=THEME['surface'],
-            bd=1,
-            relief=tk.SOLID,
+            bd=0,
+            relief=tk.FLAT,
             highlightbackground=THEME['border'],
             highlightthickness=1
         )
@@ -367,7 +429,7 @@ class ThemedModal(tk.Frame):
         tk.Label(
             header,
             text=title,
-            font=(FONT_NAME, 12, 'bold'),
+            font=(FONT_NAME, 14, 'bold'),
             bg=THEME['surface'],
             fg=THEME['text']
         ).pack(side=tk.LEFT)

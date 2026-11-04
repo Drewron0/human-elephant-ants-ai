@@ -1,14 +1,10 @@
 import tkinter as tk
 from typing import Optional
-from ui_theme import THEME, FONT_NAME, ButtonSecondary, ButtonDanger
+from ui_theme import THEME, FONT_NAME, ButtonPrimary, ButtonSecondary, CaptureLegend
 
 
 class MainMenuView(tk.Frame):
-    """
-    Main Navigation Hub.
-    Provides direct access to practice matches,
-    benchmarking lab, and records without redundant submenus.
-    """
+    """Play destinations and capture rules, together on the first screen."""
     def __init__(self, parent, app):
         super().__init__(parent, bg=THEME['bg'])
         self.app = app
@@ -20,126 +16,57 @@ class MainMenuView(tk.Frame):
             widget.destroy()
 
         container = tk.Frame(self, bg=THEME['bg'])
-        container.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        container.place(relx=0.5, rely=0.5, anchor=tk.CENTER, relwidth=0.88)
+        container.columnconfigure(0, weight=1, uniform='menu')
+        container.columnconfigure(1, weight=1, uniform='menu')
 
-        # Title Block
         title_box = tk.Frame(container, bg=THEME['bg'])
-        title_box.pack(pady=(0, 22))
+        title_box.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0, 24))
+        tk.Label(title_box, text='Chess-Sut', font=(FONT_NAME, 28, 'bold'),
+                 bg=THEME['bg'], fg=THEME['text']).pack(anchor='w')
+        tk.Label(title_box, text='Human. Elephant. Ant. A game of tactical choices.',
+                 font=(FONT_NAME, 12), bg=THEME['bg'], fg=THEME['text_muted']).pack(
+                     anchor='w', pady=(8, 0))
 
-        tk.Label(
-            title_box,
-            text="CHESS-SUT",
-            font=(FONT_NAME, 26, "bold"),
-            bg=THEME['bg'],
-            fg=THEME['text']
-        ).pack()
-
-        tk.Label(
-            title_box,
-            text="Human Elephant Ant Tactical Board Game",
-            font=(FONT_NAME, 11),
-            bg=THEME['bg'],
-            fg=THEME['text_muted']
-        ).pack(pady=(4, 0))
-
-        # Menu Container Card
-        card = tk.Frame(
-            container,
-            bg=THEME['surface'],
-            bd=1,
-            relief=tk.SOLID,
-            highlightbackground=THEME['border'],
-            highlightthickness=1,
-            padx=32,
-            pady=24
-        )
-        card.pack()
-
-        w = 32
+        actions = tk.Frame(container, bg=THEME['surface'], padx=24, pady=24)
+        actions.grid(row=1, column=0, sticky='nsew', padx=(0, 8))
+        heading = 'Choose your game' if self.active_category is None else 'Records & guide'
+        tk.Label(actions, text=heading, font=(FONT_NAME, 14, 'bold'),
+                 bg=THEME['surface'], fg=THEME['text']).pack(anchor='w', pady=(0, 16))
 
         if self.active_category is None:
-            # Main Navigation Actions
-            tk.Label(
-                card,
-                text="MAIN MENU",
-                font=(FONT_NAME, 9, "bold"),
-                bg=THEME['surface'],
-                fg=THEME['text_muted']
-            ).pack(pady=(0, 10))
+            ButtonPrimary(actions, text='Custom puzzles',
+                          command=lambda: self.app.show_view('puzzle_select')).pack(
+                              fill=tk.X, pady=(0, 8))
+            destinations = [
+                ('Play vs AI', lambda: self.app.open_config('PvE')),
+                ('Create a custom stage', lambda: self.app.show_view('stage_editor')),
+                ('Simulation & benchmark lab', lambda: self.app.show_view('benchmark')),
+                ('Records & guide', lambda: self._show_category('records')),
+            ]
+        else:
+            destinations = [
+                ('Leaderboard & records', lambda: self.app.show_view('leaderboard')),
+                ('How to play', lambda: self.app.show_view('tutorial')),
+                ('Back to main menu', lambda: self._show_category(None)),
+            ]
+        for label, command in destinations:
+            ButtonSecondary(actions, text=label, command=command).pack(fill=tk.X, pady=(0, 8))
 
-            ButtonSecondary(
-                card,
-                text="Custom Puzzles",
-                command=lambda: self.app.show_view('puzzle_select'),
-                width=w
-            ).pack(pady=4)
+        rules = tk.Frame(container, bg=THEME['surface'], padx=24, pady=24)
+        rules.grid(row=1, column=1, sticky='nsew', padx=(8, 0))
+        CaptureLegend(rules).pack(fill=tk.X)
+        tk.Label(rules, text='Race to the star', font=(FONT_NAME, 14, 'bold'),
+                 bg=THEME['surface'], fg=THEME['text']).pack(anchor='w', pady=(24, 8))
+        goal = tk.Label(rules, text="Move any piece to your opponent's star corner to win.\n"
+                                   'Each piece moves one square in any direction.',
+                        font=(FONT_NAME, 11), bg=THEME['surface'], fg=THEME['text_muted'],
+                        justify=tk.LEFT, anchor='w')
+        goal.pack(fill=tk.X)
+        rules.bind('<Configure>', lambda event: goal.config(wraplength=max(1, event.width - 48)))
 
-            ButtonSecondary(
-                card,
-                text="Play vs AI (PvE)",
-                command=lambda: self.app.open_config('PvE'),
-                width=w
-            ).pack(pady=4)
-
-            ButtonSecondary(
-                card,
-                text="Custom Stage Editor",
-                command=lambda: self.app.show_view('stage_editor'),
-                width=w
-            ).pack(pady=4)
-
-            ButtonSecondary(
-                card,
-                text="Simulation & Benchmark Lab",
-                command=lambda: self.app.show_view('benchmark'),
-                width=w
-            ).pack(pady=4)
-
-            ButtonSecondary(
-                card,
-                text="Records & Guide",
-                command=lambda: self._show_category("records"),
-                width=w
-            ).pack(pady=4)
-
-            ButtonDanger(
-                card,
-                text="Quit Application",
-                command=self.app.destroy,
-                width=w
-            ).pack(pady=(14, 2))
-
-        elif self.active_category == "records":
-            # Records and Guide Submenu
-            tk.Label(
-                card,
-                text="RECORDS & GUIDE",
-                font=(FONT_NAME, 9, "bold"),
-                bg=THEME['surface'],
-                fg=THEME['text_muted']
-            ).pack(pady=(0, 10))
-
-            ButtonSecondary(
-                card,
-                text="Leaderboard & Records",
-                command=lambda: self.app.show_view('leaderboard'),
-                width=w
-            ).pack(pady=4)
-
-
-            ButtonSecondary(
-                card,
-                text="How to Play Guide",
-                command=lambda: self.app.show_view('tutorial'),
-                width=w
-            ).pack(pady=4)
-
-            ButtonSecondary(
-                card,
-                text="Back to Main Menu",
-                command=lambda: self._show_category(None),
-                width=w
-            ).pack(pady=(12, 2))
+        ButtonSecondary(container, text='Quit application', command=self.app.destroy).grid(
+            row=2, column=0, sticky='w', pady=(16, 0))
 
     def _show_category(self, cat: Optional[str]):
         self.active_category = cat

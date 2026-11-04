@@ -21,8 +21,9 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 
 ## 2. Core Features
 
-### Modern Clean Dark Design System
-- Built with restrained typography, high-contrast dark system palette (`#121214`, `#1C1C1E`, `#2C2C2E`), and subtle elevation.
+### Modern Light Design System
+- Built with system typography, pale gray backgrounds, white surfaces, readable dark text, and a restrained blue accent.
+- An illustrated **Legend** on the menu, practice board, puzzle board, and guide shows Human beats Ant, Ant beats Elephant, and Elephant beats Human, directly from the game's capture rules.
 - Fluid, interactive splitters (`tk.PanedWindow`) allowing users to resize sidebars while the board dynamically scales to fit the container.
 
 ### Tactical Stage Studio & Custom Stage Builder
@@ -51,7 +52,7 @@ AFL2/
 |-- puzzle_logic.py          # Custom-stage catalog, verification and benchmark simulations
 |-- run_benchmark.py         # Automated CLI benchmark runner for research metrics
 |-- storage.py               # JSON persistence for profiles, leaderboards, and custom stages
-|-- ui_theme.py              # Dark theme definitions, colors, and components
+|-- ui_theme.py              # Light theme, capture legend, colors, and components
 |-- verify_stages.py         # Automated verification suite for stage winnability
 |-- tests/
 |   |-- test_game.py         # Unit test suite covering mechanics, AI, and CRUD

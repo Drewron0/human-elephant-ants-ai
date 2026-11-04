@@ -5,10 +5,31 @@ from pathlib import Path
 
 from PIL import Image
 
-from ui_theme import _piece_art, draw_board_thumbnail, draw_piece_image
+from game_logic import BEATS, PIECE_NAMES
+from ui_theme import THEME, CaptureLegend, _piece_art, draw_board_thumbnail, draw_piece_image
 
 
 class PieceImageTests(unittest.TestCase):
+    def test_legend_labels_and_art_match_capture_rules(self):
+        root = tk.Tk()
+        root.withdraw()
+        self.addCleanup(root.destroy)
+        parent = tk.Frame(root, bg=THEME['surface'])
+        legend = CaptureLegend(parent)
+        rows = [child for child in legend.winfo_children() if isinstance(child, tk.Frame)]
+        self.assertEqual(len(rows), len(BEATS))
+        gc.collect()
+        for row, (attacker, target) in zip(rows, BEATS.items()):
+            label = next(child for child in row.winfo_children() if isinstance(child, tk.Label))
+            self.assertEqual(label.cget('text'), f'{PIECE_NAMES[attacker]} beats {PIECE_NAMES[target]}')
+            artwork = [child for child in row.winfo_children() if isinstance(child, tk.Canvas)]
+            self.assertEqual(len(artwork), 2)
+            self.assertEqual(set(artwork[0]._piece_images), {attacker})
+            self.assertEqual(set(artwork[1]._piece_images), {target})
+            for canvas in artwork:
+                image_name = canvas.itemcget(canvas.find_all()[0], 'image')
+                self.assertGreater(int(root.tk.call('image', 'width', image_name)), 0)
+
     def test_art_matches_supplied_images_without_transparent_margins(self):
         assets = Path(__file__).resolve().parents[1] / 'assets'
         for piece_type, filename in [('H', 'orang.png'), ('E', 'gajah.png'), ('A', 'semut.png')]:

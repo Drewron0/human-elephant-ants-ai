@@ -4,7 +4,7 @@ from typing import Dict, Any, Tuple, Optional
 
 from ui_theme import (
     THEME, FONT_NAME, ButtonPrimary, ButtonSecondary, ButtonDanger,
-    ThemedModal, draw_star, draw_piece_image
+    ThemedModal, draw_star, draw_piece_image, bind_mousewheel
 )
 import storage
 
@@ -98,7 +98,7 @@ class StageEditorView(tk.Frame):
         self.paned.add(self.left_pane, minsize=440, stretch="always")
         self.left_pane.bind("<Configure>", self._on_pane_resize)
 
-        self.canvas_card = tk.Frame(self.left_pane, bg=THEME['surface'], bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1, padx=10, pady=10)
+        self.canvas_card = tk.Frame(self.left_pane, bg=THEME['surface'], bd=0, relief=tk.FLAT, highlightbackground=THEME['border'], highlightthickness=1, padx=10, pady=10)
         self.canvas_card.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
         init_dim = self.current_sq_size * self.board_size
@@ -110,48 +110,55 @@ class StageEditorView(tk.Frame):
 
         # Right Controls & Palette Pane
         self.right_pane = tk.Frame(self.paned, bg=THEME['surface'], bd=0, highlightbackground=THEME['border'], highlightthickness=1)
-        self.paned.add(self.right_pane, minsize=320, stretch="never")
+        self.paned.add(self.right_pane, minsize=360, stretch="never")
 
-        content = tk.Frame(self.right_pane, bg=THEME['surface'], padx=16, pady=16)
-        content.pack(fill=tk.BOTH, expand=True)
+        scroll_canvas = tk.Canvas(self.right_pane, bg=THEME['surface'], highlightthickness=0)
+        scroll_y = ttk.Scrollbar(self.right_pane, orient=tk.VERTICAL, command=scroll_canvas.yview)
+        content = tk.Frame(scroll_canvas, bg=THEME['surface'], padx=16, pady=16)
+        content_window = scroll_canvas.create_window((0, 0), window=content, anchor='nw')
+        content.bind('<Configure>', lambda event: scroll_canvas.configure(scrollregion=scroll_canvas.bbox('all')))
+        scroll_canvas.bind('<Configure>', lambda event: scroll_canvas.itemconfigure(content_window, width=event.width))
+        scroll_canvas.configure(yscrollcommand=scroll_y.set)
+        scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
+        scroll_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # Stage Metadata
-        tk.Label(content, text="Stage Title:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 2))
+        tk.Label(content, text="Stage Title:", font=(FONT_NAME, 10, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 2))
         self.var_title = tk.StringVar(value=self.stage_title)
-        tk.Entry(content, textvariable=self.var_title, font=(FONT_NAME, 9), bg=THEME['surface_light'], fg=THEME['text'], insertbackground=THEME['text'], bd=0).pack(fill=tk.X, pady=(0, 8))
+        tk.Entry(content, textvariable=self.var_title, font=(FONT_NAME, 10), bg=THEME['surface_light'], fg=THEME['text'], insertbackground=THEME['text'], bd=0).pack(fill=tk.X, pady=(0, 8))
 
-        tk.Label(content, text="Stage Description:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 2))
+        tk.Label(content, text="Stage Description:", font=(FONT_NAME, 10, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 2))
         self.var_desc = tk.StringVar(value=self.stage_desc)
-        tk.Entry(content, textvariable=self.var_desc, font=(FONT_NAME, 9), bg=THEME['surface_light'], fg=THEME['text'], insertbackground=THEME['text'], bd=0).pack(fill=tk.X, pady=(0, 10))
+        tk.Entry(content, textvariable=self.var_desc, font=(FONT_NAME, 10), bg=THEME['surface_light'], fg=THEME['text'], insertbackground=THEME['text'], bd=0).pack(fill=tk.X, pady=(0, 10))
 
-        tk.Label(content, text="Minimum Steps:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 2))
+        tk.Label(content, text="Minimum Steps:", font=(FONT_NAME, 10, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 2))
         self.var_minimum_steps = tk.StringVar(value=self.stage_minimum)
-        self.entry_minimum_steps = tk.Entry(content, textvariable=self.var_minimum_steps, font=(FONT_NAME, 9), bg=THEME['surface_light'], fg=THEME['text'], insertbackground=THEME['text'], bd=0)
+        self.entry_minimum_steps = tk.Entry(content, textvariable=self.var_minimum_steps, font=(FONT_NAME, 10), bg=THEME['surface_light'], fg=THEME['text'], insertbackground=THEME['text'], bd=0)
         self.entry_minimum_steps.pack(fill=tk.X, pady=(0, 3))
-        self.lbl_save_error = tk.Label(content, text="", font=(FONT_NAME, 8), bg=THEME['surface'], fg=THEME['danger'], wraplength=270, justify="left")
+        self.lbl_save_error = tk.Label(content, text="", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['danger'], wraplength=270, justify="left")
         self.lbl_save_error.pack(anchor="w", pady=(0, 8))
 
         # Board Size Selection
-        tk.Label(content, text="Board Size:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 2))
+        tk.Label(content, text="Board Size:", font=(FONT_NAME, 10, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 2))
         self.var_size = tk.StringVar(value=f"{self.board_size}x{self.board_size}")
-        cb_size = ttk.Combobox(content, textvariable=self.var_size, values=["6x6", "7x7", "8x8", "9x9"], state="readonly", font=(FONT_NAME, 9))
+        cb_size = ttk.Combobox(content, textvariable=self.var_size, values=["6x6", "7x7", "8x8", "9x9"], state="readonly", font=(FONT_NAME, 10))
         cb_size.pack(fill=tk.X, pady=(0, 12))
         cb_size.bind("<<ComboboxSelected>>", self._on_size_change)
 
         # Piece Palette
-        tk.Label(content, text="Placement Palette:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 4))
-        palette_card = tk.Frame(content, bg=THEME['surface_card'], padx=8, pady=8, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
+        tk.Label(content, text="Placement Palette:", font=(FONT_NAME, 10, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 4))
+        palette_card = tk.Frame(content, bg=THEME['surface_card'], padx=8, pady=8, bd=0, relief=tk.FLAT, highlightbackground=THEME['border'], highlightthickness=1)
         palette_card.pack(fill=tk.X, pady=(0, 12))
 
         self.palette_buttons = {}
 
         tools = [
-            ("P0_H", "Player Human (H)", '#30D158'),
-            ("P0_E", "Player Elephant (E)", '#30D158'),
-            ("P0_A", "Player Ant (A)", '#30D158'),
-            ("P1_E", "AI Elephant (E)", '#FF453A'),
-            ("P1_H", "AI Human (H)", '#FF453A'),
-            ("P1_A", "AI Ant (A)", '#FF453A'),
+            ("P0_H", "Player Human (H)", THEME['success']),
+            ("P0_E", "Player Elephant (E)", THEME['success']),
+            ("P0_A", "Player Ant (A)", THEME['success']),
+            ("P1_E", "AI Elephant (E)", THEME['danger']),
+            ("P1_H", "AI Human (H)", THEME['danger']),
+            ("P1_A", "AI Ant (A)", THEME['danger']),
             ("ERASER", "Eraser Tool", THEME['surface_light'])
         ]
 
@@ -159,7 +166,7 @@ class StageEditorView(tk.Frame):
             btn = tk.Button(
                 palette_card,
                 text=label,
-                font=(FONT_NAME, 9),
+                font=(FONT_NAME, 10),
                 bg=THEME['surface_light'],
                 fg=col if col != THEME['surface_light'] else THEME['text'],
                 bd=0,
@@ -185,7 +192,7 @@ class StageEditorView(tk.Frame):
         tk.Label(
             footer,
             text="Hotkeys: [1-3] Player Units  |  [4-6] AI Units  |  [7/0] Eraser\nRight-click: Quick Erase",
-            font=(FONT_NAME, 8),
+            font=(FONT_NAME, 9),
             bg=THEME['surface'],
             fg=THEME['text_muted'],
             justify="center"
@@ -193,6 +200,7 @@ class StageEditorView(tk.Frame):
 
         self._refresh_palette_highlight()
         self._draw_board()
+        bind_mousewheel(content, scroll_canvas)
 
     def _on_pane_resize(self, event):
         if self._resize_job is not None:
@@ -224,7 +232,7 @@ class StageEditorView(tk.Frame):
             if code == self.active_tool:
                 btn.config(bg=THEME['accent'], fg='#FFFFFF')
             else:
-                col = '#30D158' if code.startswith('P0') else ('#FF453A' if code.startswith('P1') else THEME['text'])
+                col = THEME['success'] if code.startswith('P0') else (THEME['danger'] if code.startswith('P1') else THEME['text'])
                 btn.config(bg=THEME['surface_light'], fg=col)
 
     def _on_size_change(self, event=None):
@@ -356,7 +364,7 @@ class StageEditorView(tk.Frame):
         if not self.edit_stage_id:
             return
         modal = ThemedModal(self, "Delete Stage", min_width=340)
-        tk.Label(modal.body, text="Are you sure you want to delete this custom stage permanently?", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['text']).pack(pady=10)
+        tk.Label(modal.body, text="Are you sure you want to delete this custom stage permanently?", font=(FONT_NAME, 10), bg=THEME['surface'], fg=THEME['text']).pack(pady=10)
 
         def confirm():
             modal.dismiss()

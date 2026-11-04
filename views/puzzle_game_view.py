@@ -7,7 +7,7 @@ from queue import Queue, Empty
 
 from ui_theme import (
     THEME, FONT_NAME, HOTKEYS, ButtonPrimary, ButtonSecondary, ButtonDanger,
-    ThemedModal, draw_star, bind_mousewheel, draw_piece_image
+    ThemedModal, draw_star, bind_mousewheel, draw_piece_image, CaptureLegend
 )
 from game_logic import GameState, Piece
 from puzzle_logic import PuzzleSession, get_all_puzzles, make_puzzle_move
@@ -81,7 +81,7 @@ class PuzzleGameView(tk.Frame):
         tk.Label(
             title_box,
             text=f"{self.scenario.step_summary} | Move Limit: {self.session.s_max}",
-            font=(FONT_NAME, 9),
+            font=(FONT_NAME, 10),
             bg=THEME['surface'],
             fg=THEME['text_muted']
         ).pack(side=tk.LEFT, padx=(8, 0))
@@ -102,8 +102,8 @@ class PuzzleGameView(tk.Frame):
         self.canvas_card = tk.Frame(
             self.board_container,
             bg=THEME['surface'],
-            bd=1,
-            relief=tk.SOLID,
+            bd=0,
+            relief=tk.FLAT,
             highlightbackground=THEME['border'],
             highlightthickness=1,
             padx=6,
@@ -117,7 +117,7 @@ class PuzzleGameView(tk.Frame):
 
         # Right Controls & Telemetry Sidebar (Resizable)
         self.sidebar_pane = tk.Frame(self.paned, bg=THEME['surface'], bd=0, highlightbackground=THEME['border'], highlightthickness=1)
-        self.paned.add(self.sidebar_pane, minsize=300, stretch="never")
+        self.paned.add(self.sidebar_pane, minsize=340, stretch="never")
 
         sidebar_scroll_canvas = tk.Canvas(self.sidebar_pane, bg=THEME['surface'], highlightthickness=0)
         scroll_y = ttk.Scrollbar(self.sidebar_pane, orient=tk.VERTICAL, command=sidebar_scroll_canvas.yview)
@@ -138,7 +138,7 @@ class PuzzleGameView(tk.Frame):
         bind_mousewheel(sidebar_scroll_canvas, sidebar_scroll_canvas)
 
         # Player & AI Info Card
-        players_card = tk.Frame(content, bg=THEME['surface_card'], padx=10, pady=8, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
+        players_card = tk.Frame(content, bg=THEME['surface_card'], padx=10, pady=8, bd=0, relief=tk.FLAT, highlightbackground=THEME['border'], highlightthickness=1)
         players_card.pack(fill=tk.X, pady=(0, 8))
 
         p_name = self.config.get('p1_name', 'Player 1')
@@ -149,53 +149,59 @@ class PuzzleGameView(tk.Frame):
 
         row_p = tk.Frame(players_card, bg=THEME['surface_card'])
         row_p.pack(fill=tk.X)
-        tk.Label(row_p, text="Player:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=THEME['text_muted']).pack(side=tk.LEFT)
-        tk.Label(row_p, text=p_name, font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=self.config.get('p1_color', '#30D158')).pack(side=tk.RIGHT)
+        tk.Label(row_p, text='●', font=(FONT_NAME, 10), bg=THEME['surface_card'],
+                 fg=self.config.get('p1_color', '#30D158')).pack(side=tk.LEFT, padx=(0, 6))
+        tk.Label(row_p, text="Player:", font=(FONT_NAME, 10, "bold"), bg=THEME['surface_card'], fg=THEME['text_muted']).pack(side=tk.LEFT)
+        tk.Label(row_p, text=p_name, font=(FONT_NAME, 10, "bold"), bg=THEME['surface_card'], fg=THEME['text']).pack(side=tk.RIGHT)
 
         row_ai = tk.Frame(players_card, bg=THEME['surface_card'])
         row_ai.pack(fill=tk.X, pady=(3, 0))
-        tk.Label(row_ai, text="Defender:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=THEME['text_muted']).pack(side=tk.LEFT)
-        tk.Label(row_ai, text=ai_name, font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=self.config.get('p2_color', '#FF453A')).pack(side=tk.RIGHT)
+        tk.Label(row_ai, text='●', font=(FONT_NAME, 10), bg=THEME['surface_card'],
+                 fg=self.config.get('p2_color', '#FF453A')).pack(side=tk.LEFT, padx=(0, 6))
+        tk.Label(row_ai, text="Defender:", font=(FONT_NAME, 10, "bold"), bg=THEME['surface_card'], fg=THEME['text_muted']).pack(side=tk.LEFT)
+        tk.Label(row_ai, text=ai_name, font=(FONT_NAME, 10), bg=THEME['surface_card'], fg=THEME['text']).pack(side=tk.RIGHT)
+
+        CaptureLegend(content).pack(fill=tk.X, pady=(8, 16))
 
         # Strategic Attempt Telemetry Box
-        strat_card = tk.Frame(content, bg=THEME['surface_light'], padx=10, pady=8, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
+        strat_card = tk.Frame(content, bg=THEME['surface_light'], padx=10, pady=8, bd=0, relief=tk.FLAT, highlightbackground=THEME['border'], highlightthickness=1)
         strat_card.pack(fill=tk.X, pady=(0, 8))
 
-        tk.Label(strat_card, text="ATTEMPT PROGRESS", font=(FONT_NAME, 8, "bold"), bg=THEME['surface_light'], fg=THEME['text_muted']).pack(anchor="w", pady=(0, 3))
+        tk.Label(strat_card, text="Attempt progress", font=(FONT_NAME, 10, "bold"), bg=THEME['surface_light'], fg=THEME['text_muted']).pack(anchor="w", pady=(0, 3))
 
         s_row = tk.Frame(strat_card, bg=THEME['surface_light'])
         s_row.pack(fill=tk.X)
         self.lbl_steps = tk.Label(s_row, text="Steps: 0", font=(FONT_NAME, 10, "bold"), bg=THEME['surface_light'], fg=THEME['text'])
         self.lbl_steps.pack(side=tk.LEFT)
 
-        self.lbl_delay = tk.Label(s_row, text="Extra: 0 moves", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_light'], fg=THEME['success'])
+        self.lbl_delay = tk.Label(s_row, text="Extra: 0 moves", font=(FONT_NAME, 10, "bold"), bg=THEME['surface_light'], fg=THEME['success'])
         self.lbl_delay.pack(side=tk.RIGHT)
 
         st_row = tk.Frame(strat_card, bg=THEME['surface_light'])
         st_row.pack(fill=tk.X, pady=(3, 0))
-        self.lbl_sub_stats = tk.Label(st_row, text="Resets: 0 | Undos: 0", font=(FONT_NAME, 8), bg=THEME['surface_light'], fg=THEME['text_muted'])
+        self.lbl_sub_stats = tk.Label(st_row, text="Resets: 0 | Undos: 0", font=(FONT_NAME, 9), bg=THEME['surface_light'], fg=THEME['text_muted'])
         self.lbl_sub_stats.pack(side=tk.LEFT)
 
-        self.lbl_status = tk.Label(st_row, text="ON TRACK", font=(FONT_NAME, 8, "bold"), bg=THEME['surface_light'], fg=THEME['accent'])
+        self.lbl_status = tk.Label(st_row, text="ON TRACK", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_light'], fg=THEME['accent'])
         self.lbl_status.pack(side=tk.RIGHT)
 
         # AI Search Metrics Box (Only shown if show_metrics is enabled)
         if self.show_metrics:
-            self.ai_metrics_card = tk.Frame(content, bg=THEME['surface_card'], padx=10, pady=8, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
+            self.ai_metrics_card = tk.Frame(content, bg=THEME['surface_card'], padx=10, pady=8, bd=0, relief=tk.FLAT, highlightbackground=THEME['border'], highlightthickness=1)
             self.ai_metrics_card.pack(fill=tk.X, pady=(0, 8))
 
-            tk.Label(self.ai_metrics_card, text="AI SEARCH TELEMETRY", font=(FONT_NAME, 8, "bold"), bg=THEME['surface_card'], fg=THEME['text_muted']).pack(anchor="w", pady=(0, 3))
+            tk.Label(self.ai_metrics_card, text="AI search telemetry", font=(FONT_NAME, 10, "bold"), bg=THEME['surface_card'], fg=THEME['text_muted']).pack(anchor="w", pady=(0, 3))
 
-            self.lbl_ai_action = tk.Label(self.ai_metrics_card, text="Last Action A = None", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text'])
+            self.lbl_ai_action = tk.Label(self.ai_metrics_card, text="Last Action A = None", font=(FONT_NAME, 9), bg=THEME['surface_card'], fg=THEME['text'])
             self.lbl_ai_action.pack(anchor="w")
 
-            self.lbl_ai_metrics = tk.Label(self.ai_metrics_card, text="Latency: -- | Prune: 0.0%", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'])
+            self.lbl_ai_metrics = tk.Label(self.ai_metrics_card, text="Latency: -- | Prune: 0.0%", font=(FONT_NAME, 9), bg=THEME['surface_card'], fg=THEME['text_muted'])
             self.lbl_ai_metrics.pack(anchor="w", pady=(2, 0))
         else:
             self.ai_metrics_card = None
 
         # Move History
-        tk.Label(content, text="Move History:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text_muted']).pack(anchor="w")
+        tk.Label(content, text="Move History:", font=(FONT_NAME, 10, "bold"), bg=THEME['surface'], fg=THEME['text_muted']).pack(anchor="w")
         notation_box = tk.Frame(content, bg=THEME['surface_light'], height=130)
         notation_box.pack(fill=tk.X, pady=(3, 8))
         notation_box.pack_propagate(False)
@@ -207,7 +213,7 @@ class PuzzleGameView(tk.Frame):
             notation_box,
             bg=THEME['surface_card'],
             fg=THEME['text'],
-            font=(FONT_NAME, 8),
+            font=(FONT_NAME, 9),
             bd=0,
             yscrollcommand=hist_scroll.set,
             selectbackground=THEME['accent']
@@ -233,6 +239,9 @@ class PuzzleGameView(tk.Frame):
 
         btn_frame.columnconfigure(0, weight=1)
         btn_frame.columnconfigure(1, weight=1)
+
+        bind_mousewheel(content, sidebar_scroll_canvas)
+        bind_mousewheel(self.list_notation, self.list_notation)
 
         self._draw_board()
         self._update_ui_state()
@@ -283,12 +292,12 @@ class PuzzleGameView(tk.Frame):
         for c in range(size):
             x = c * sq_size + sq_size // 2
             y = board_dim + 15
-            self.canvas.create_text(x, y, text=chr(65 + c), font=(FONT_NAME, 8, "bold"), fill=THEME['text_muted'])
+            self.canvas.create_text(x, y, text=chr(65 + c), font=(FONT_NAME, 9, "bold"), fill=THEME['text_muted'])
 
         for r in range(size):
             x = board_dim + 15
             y = r * sq_size + sq_size // 2
-            self.canvas.create_text(x, y, text=str(size - r), font=(FONT_NAME, 8, "bold"), fill=THEME['text_muted'])
+            self.canvas.create_text(x, y, text=str(size - r), font=(FONT_NAME, 9, "bold"), fill=THEME['text_muted'])
 
         # Draw Cells
         for r in range(size):
@@ -681,7 +690,7 @@ class PuzzleGameView(tk.Frame):
         tk.Label(
             modal.body,
             text=summary,
-            font=(FONT_NAME, 9),
+            font=(FONT_NAME, 10),
             bg=THEME['surface'],
             fg=THEME['text_muted'],
             justify="center"
@@ -693,7 +702,7 @@ class PuzzleGameView(tk.Frame):
         tk.Label(
             box,
             text=f"Total Steps (Current Attempt): {self.session.current_attempt_steps} / Max: {self.session.s_max}",
-            font=(FONT_NAME, 9, "bold"),
+            font=(FONT_NAME, 10, "bold"),
             bg=THEME['surface_light'],
             fg=THEME['text']
         ).pack(anchor="w")
@@ -701,7 +710,7 @@ class PuzzleGameView(tk.Frame):
         tk.Label(
             box,
             text=f"Cumulative Steps Across Resets: {self.session.cumulative_steps + self.session.current_attempt_steps}",
-            font=(FONT_NAME, 8),
+            font=(FONT_NAME, 9),
             bg=THEME['surface_light'],
             fg=THEME['text_muted']
         ).pack(anchor="w")
@@ -709,7 +718,7 @@ class PuzzleGameView(tk.Frame):
         tk.Label(
             box,
             text=f"Resets: {self.session.resets_count} | Undos Used: {self.session.undo_count}",
-            font=(FONT_NAME, 8),
+            font=(FONT_NAME, 9),
             bg=THEME['surface_light'],
             fg=THEME['text_muted']
         ).pack(anchor="w")
@@ -746,7 +755,7 @@ class PuzzleGameView(tk.Frame):
         tk.Label(
             modal.body,
             text=content,
-            font=(FONT_NAME, 9),
+            font=(FONT_NAME, 10),
             bg=THEME['surface'],
             fg=THEME['text'],
             justify="left"

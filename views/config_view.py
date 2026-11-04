@@ -29,8 +29,8 @@ class ConfigView(tk.Frame):
         card = tk.Frame(
             container,
             bg=THEME['surface'],
-            bd=1,
-            relief=tk.SOLID,
+            bd=0,
+            relief=tk.FLAT,
             highlightbackground=THEME['border'],
             highlightthickness=1,
             padx=28,
@@ -39,8 +39,8 @@ class ConfigView(tk.Frame):
         card.pack()
 
         row = 0
-        lbl_font = (FONT_NAME, 9, "bold")
-        entry_font = (FONT_NAME, 9)
+        lbl_font = (FONT_NAME, 10, "bold")
+        entry_font = (FONT_NAME, 10)
 
         # Primary Player Profile
         tk.Label(card, text="Player 1 Name:", font=lbl_font, bg=THEME['surface'], fg=THEME['text']).grid(row=row, column=0, sticky="w", pady=6)

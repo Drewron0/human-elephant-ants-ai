@@ -33,7 +33,7 @@ class BenchmarkView(tk.Frame):
 
         tk.Label(
             header,
-            text="AI EVALUATION & BENCHMARK LAB",
+            text="AI evaluation & benchmark lab",
             font=(FONT_NAME, 18, "bold"),
             bg=THEME['bg'],
             fg=THEME['text']
@@ -51,8 +51,8 @@ class BenchmarkView(tk.Frame):
         ctrl_card = tk.Frame(
             container,
             bg=THEME['surface'],
-            bd=1,
-            relief=tk.SOLID,
+            bd=0,
+            relief=tk.FLAT,
             highlightbackground=THEME['border'],
             highlightthickness=1,
             padx=16,
@@ -60,8 +60,8 @@ class BenchmarkView(tk.Frame):
         )
         ctrl_card.pack(fill=tk.X, pady=(0, 12))
 
-        lbl_fnt = (FONT_NAME, 9, "bold")
-        ent_fnt = (FONT_NAME, 9)
+        lbl_fnt = (FONT_NAME, 10, "bold")
+        ent_fnt = (FONT_NAME, 10)
 
         # Primary Controls: Agent and Scripted Player
         row1 = tk.Frame(ctrl_card, bg=THEME['surface'])
@@ -144,7 +144,7 @@ class BenchmarkView(tk.Frame):
         self.lbl_status = tk.Label(
             prog_frame,
             text="Ready to run simulated evaluation matches.",
-            font=(FONT_NAME, 8, "italic"),
+            font=(FONT_NAME, 9, "italic"),
             bg=THEME['surface'],
             fg=THEME['text_muted']
         )
@@ -154,8 +154,8 @@ class BenchmarkView(tk.Frame):
         table_card = tk.Frame(
             container,
             bg=THEME['surface'],
-            bd=1,
-            relief=tk.SOLID,
+            bd=0,
+            relief=tk.FLAT,
             highlightbackground=THEME['border'],
             highlightthickness=1,
             padx=12,
@@ -165,8 +165,8 @@ class BenchmarkView(tk.Frame):
 
         tk.Label(
             table_card,
-            text="TABLE 3: COMPARATIVE SEARCH & STRATEGIC METRICS",
-            font=(FONT_NAME, 9, "bold"),
+            text="Comparative search & strategic metrics",
+            font=(FONT_NAME, 10, "bold"),
             bg=THEME['surface'],
             fg=THEME['text']
         ).pack(anchor="w", pady=(0, 6))
@@ -397,7 +397,7 @@ class BenchmarkView(tk.Frame):
             tk.Label(
                 modal.body,
                 text=f"Benchmark results successfully exported to:\n{filename}",
-                font=(FONT_NAME, 9),
+                font=(FONT_NAME, 10),
                 bg=THEME['surface'],
                 fg=THEME['text'],
                 justify="center"
