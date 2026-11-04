@@ -339,7 +339,7 @@ class PuzzleGameView(tk.Frame):
         self.canvas.create_text(cx, cy, text=piece.p_type, font=(FONT_NAME, font_sz, "bold"), fill='#FFFFFF')
 
     def _on_board_click(self, event):
-        if not self.is_game_active or self.state.winner is not None or self.state.current_turn != 0:
+        if not self.is_game_active or self.session.is_neutralized or self.state.winner is not None or self.state.current_turn != 0:
             return
 
         size = self.state.board_size
@@ -370,7 +370,7 @@ class PuzzleGameView(tk.Frame):
                 self._draw_board()
 
     def _execute_player_move(self, start: Tuple[int, int], end: Tuple[int, int]):
-        if not self.is_game_active:
+        if not self.is_game_active or self.session.is_neutralized:
             return
         move = make_puzzle_move(self.state, start, end)
         if not move:
@@ -389,7 +389,7 @@ class PuzzleGameView(tk.Frame):
             self._handle_puzzle_finish(solved=True)
             return
         elif status == 'NEUTRALIZED':
-            self._handle_puzzle_finish(solved=False, reason=self.session.neutralization_reason)
+            # Keep the failed position and its history available for counted undo.
             return
 
         if self.state.current_turn == 1 and self.is_game_active:
@@ -397,7 +397,7 @@ class PuzzleGameView(tk.Frame):
 
     def _trigger_ai_move(self):
         self.ai_timer_id = None
-        if not self.is_game_active or self.state.current_turn != 1:
+        if not self.is_game_active or self.session.is_neutralized or self.state.current_turn != 1:
             return
         agent_model = self.config.get('agent_model', 'proposed_d6')
         depth = self.config.get('search_depth', 6)
@@ -430,7 +430,7 @@ class PuzzleGameView(tk.Frame):
 
         def do_move():
             self.ai_timer_id = None
-            if not self.is_game_active:
+            if not self.is_game_active or self.session.is_neutralized:
                 return
             make_puzzle_move(self.state, s, e)
             self.last_move = (s, e)
@@ -439,8 +439,6 @@ class PuzzleGameView(tk.Frame):
             status = self.session.evaluate_status(self.state)
             if status == 'SOLVED':
                 self._handle_puzzle_finish(solved=True)
-            elif status == 'NEUTRALIZED':
-                self._handle_puzzle_finish(solved=False, reason=self.session.neutralization_reason)
 
         self.ai_timer_id = self.after(300, do_move)
 
@@ -468,7 +466,7 @@ class PuzzleGameView(tk.Frame):
         if status == 'SOLVED':
             self.lbl_status.config(text="SOLVED", fg=THEME['success'])
         elif status == 'NEUTRALIZED':
-            self.lbl_status.config(text="NEUTRALIZED", fg=THEME['danger'])
+            self.lbl_status.config(text="LOST - Undo or Reset", fg=THEME['danger'])
         elif status == 'DELAYED':
             self.lbl_status.config(text=f"DELAYED (+{delta})", fg=THEME['warning'])
         else:
@@ -521,6 +519,7 @@ class PuzzleGameView(tk.Frame):
 
         self.selected_sq = None
         self.valid_targets = []
+        self.last_move = None
         self._update_ui_state()
 
     def _on_reset_attempt(self):
@@ -644,7 +643,8 @@ class PuzzleGameView(tk.Frame):
             "1. Objective:\n"
             f"   Navigate your piece to the opponent's star corner within Move Limit={self.session.s_max} moves.\n"
             f"   {self.scenario.step_summary}.\n"
-            "   The minimum assumes other pieces stay fixed; AI replies can change the route.\n\n"
+            "   A verified minimum considers the defender's best legal replies.\n"
+            "   After a loss, Undo or Reset remains available. Each undo action is counted.\n\n"
             "2. Combat Hierarchy:\n"
             "   Elephant (E) defeats Human (H)\n"
             "   Human (H) defeats Ant (A)\n"

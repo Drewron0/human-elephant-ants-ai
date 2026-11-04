@@ -343,8 +343,8 @@ class PuzzleSelectView(tk.Frame):
             lbl_title = tk.Label(card, text=puzzle.title, font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=THEME['text'], wraplength=130, justify="center")
             lbl_title.pack(anchor="center", fill=tk.X)
 
-            minimum = f"Min: {puzzle.s_optimal} steps" if puzzle.s_optimal is not None else "No route"
-            lbl_sub = tk.Label(card, text=f"{puzzle.board_size}x{puzzle.board_size} | {minimum}\nFixed enemies", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'], justify="center")
+            minimum = f"Min: {puzzle.s_optimal} steps\nBest defense verified" if puzzle.s_optimal is not None else "Minimum unverified"
+            lbl_sub = tk.Label(card, text=f"{puzzle.board_size}x{puzzle.board_size} | {minimum}", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'], justify="center")
             lbl_sub.pack(anchor="center", fill=tk.X, pady=(2, 0))
 
             def bind_click(w, p_id=puzzle.id):
@@ -390,8 +390,11 @@ class PuzzleSelectView(tk.Frame):
 
         self.lbl_selected_title.config(text=puzzle.title)
         self.lbl_selected_desc.config(text=puzzle.description or "Tactical puzzle scenario.")
-        self.lbl_selected_stats.config(text=f"{puzzle.board_size}x{puzzle.board_size} Board | {puzzle.step_summary}\nMove Limit: {puzzle.s_max}")
-        self.btn_play.config(state='normal' if puzzle.s_optimal is not None else 'disabled')
+        details = f"{puzzle.board_size}x{puzzle.board_size} Board | {puzzle.step_summary}\nMove Limit: {puzzle.s_max}"
+        if puzzle.is_custom and puzzle.s_optimal is None:
+            details += '\nEdit and verify this stage before playing.'
+        self.lbl_selected_stats.config(text=details)
+        self.btn_play.config(state='disabled' if puzzle.is_custom and puzzle.s_optimal is None else 'normal')
 
         if getattr(puzzle, 'is_custom', False):
             self.frame_custom_actions.pack(fill=tk.X, pady=(0, 8))
@@ -473,7 +476,7 @@ class PuzzleSelectView(tk.Frame):
             all_p = get_all_puzzles()
             puzzle = all_p.get(self.selected_puzzle_id) or list(PRECONFIGURED_STAGES_6X6.values())[0]
 
-        if puzzle.s_optimal is None:
+        if puzzle.is_custom and puzzle.s_optimal is None:
             return
 
         p_name = self.var_player_name.get().strip() or "Player 1"

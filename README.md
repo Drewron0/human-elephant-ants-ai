@@ -26,8 +26,9 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 - Fluid, interactive splitters (`tk.PanedWindow`) allowing users to resize sidebars while the board dynamically scales to fit the container.
 
 ### Tactical Stage Studio & Custom Stage Builder
-- **Puzzle Minimum Steps:** BFS finds the shortest legal route for each player piece through the starting board, then selects the shortest. Other pieces stay fixed for this calculation; friendly pieces and non-capturable enemies block squares, while prey can be captured. Preset and loaded custom stages recompute their minimum and route instead of trusting stored counts. The move limit is three times the calculated minimum. Actual AI replies can change the route during play.
-- **Custom Stage Editor:** Verify checks for a legal route with the other pieces fixed, displays its exact minimum, and requires a route before saving. Stages without a route show `No route` and cannot be started. This static route is not a forced-win proof. The separate `verify_puzzle()` adversarial verifier remains available for benchmark certification.
+- **Custom Puzzle Verification:** Creation/editing runs adversarial Minimax against every legal defensive reply, with iterative horizons to establish the minimum number of player moves needed against best defense. Verification runs in a background thread, with a 10-second/300,000-node budget and a 14-player-move horizon. A completed negative search only excludes wins within that horizon; a budget exhaustion is `UNVERIFIED`. Neither result receives a minimum or can be saved as a verified custom stage. Static BFS routes are not accepted as winning proofs.
+- **Stored Minimum Steps:** Verified counts, a sample line of play and a layout fingerprint are saved with each custom stage. Loading uses this result without rerunning a search. A changed layout, legacy BFS result or missing proof shows `Minimum: unverified`; custom stages must be verified in the editor before play. Uncertified presets remain available as practice layouts without a claimed minimum. Verified stages use a move limit of three times their proven minimum; uncertified practice uses three times the board size.
+- **Recoverable Mistakes:** Losing the puzzle leaves its board and move history available for Undo or Reset. Each successful undo action is counted, including when it restores both the player's move and the AI's reply. Losing a predicted winning strategy does not immediately end play.
 - **Procedural Winnability Generator:** Certified sparse race puzzles, generated in background threads. A single attacker can capture every defender, and geometric distance proves its earliest corner arrival precedes the defender's earliest win. Different sizes provide different exact step counts.
 - **Stage Selection and Thumbnails:** Interactive catalog featuring live board thumbnail previews, AI difficulty mode selectors, player selection, and per-stage leaderboard tracking.
 - **Spoiler Prevention Toggle:** Toggle search metrics display before playing to prevent move spoilers.
@@ -62,7 +63,7 @@ AFL2/
     |-- menu_view.py         # Main navigation hub
     |-- puzzle_game_view.py  # Puzzle gameplay view with real-time defender AI
     |-- puzzle_select_view.py# Stage selector with thumbnails, AI picker, and leaderboards
-    |-- stage_editor_view.py # Interactive stage designer with instant BFS solver
+    |-- stage_editor_view.py # Stage editor with creation-time Minimax verification
     `-- tutorial_view.py     # How-to-play interactive manual
 ```
 

@@ -10,6 +10,8 @@ from puzzle_logic import (
     PRECONFIGURED_STAGES_6X6,
     PRECONFIGURED_PUZZLES,
     make_puzzle_move,
+    verify_puzzle,
+    puzzle_position_key,
     PuzzleScenario,
 )
 from ai_engine import evaluate_non_transitive, get_defender_move, DEFAULT_EVALUATION_WEIGHTS
@@ -52,22 +54,13 @@ class TestGameLogic(unittest.TestCase):
 
 class TestPuzzleLogic(unittest.TestCase):
     # Tests BFS safe path search, preset stages, and random puzzle generation
-    def test_presets_have_replayable_minimum_routes_with_fixed_enemies(self) -> None:
+    def test_uncertified_presets_do_not_claim_a_minimum(self) -> None:
         for stage_key, scenario in PRECONFIGURED_PUZZLES.items():
             with self.subTest(stage=stage_key):
-                self.assertIn('fixed enemies', scenario.step_label)
-                self.assertIsNotNone(scenario.s_optimal)
-                self.assertEqual(len(scenario.optimal_path) - 1, scenario.s_optimal)
-                self.assertEqual(scenario.s_max, 3 * scenario.s_optimal)
-                state = scenario.create_initial_state()
-                for start, end in zip(scenario.optimal_path, scenario.optimal_path[1:]):
-                    state.current_turn = 0  # Defenders remain stationary for the baseline.
-                    self.assertIn((start, end), state.get_valid_moves(0))
-                    make_puzzle_move(state, start, end)
-                self.assertEqual(state.winner, 0)
-
-        self.assertEqual(PRECONFIGURED_STAGES_6X6['stage_6x6_01'].s_optimal, 5)
-        self.assertEqual(PRECONFIGURED_STAGES_6X6['stage_6x6_06'].s_optimal, 4)
+                self.assertIsNone(scenario.s_optimal)
+                self.assertEqual(scenario.optimal_path, [])
+                self.assertEqual(scenario.verification_status, 'UNVERIFIED')
+                self.assertEqual(scenario.step_summary, 'Minimum: unverified')
 
     def test_minimum_counts_obstacle_detour_and_ignores_stale_saved_count(self) -> None:
         pieces = [(3, 0, 0, 'H')] + [(1, c, 1, 'E') for c in range(3)]
@@ -75,11 +68,13 @@ class TestPuzzleLogic(unittest.TestCase):
             id='detour', board_size=4, pieces=pieces, s_optimal=6,
             optimal_path=[(3, 0), (0, 3)]))
         # Three diagonal moves would have to pass through blocked (1, 2).
-        self.assertEqual(scenario.s_optimal, 4)
-        self.assertEqual(len(scenario.optimal_path), 5)
+        self.assertIsNone(scenario.s_optimal)
+        self.assertEqual(scenario.optimal_path, [])
         self.assertEqual(scenario.s_max, 12)
-        self.assertNotIn((1, 2), scenario.optimal_path)
-        self.assertEqual(PuzzleScenario('old', 'Old', '', 4, 6, pieces).s_optimal, 4)
+        self.assertIsNone(PuzzleScenario('old', 'Old', '', 4, 6, pieces).s_optimal)
+        static_steps, static_path, _ = find_optimal_winning_path(4, pieces)
+        self.assertEqual(static_steps, 4)
+        self.assertNotIn((1, 2), static_path)
 
         pieces_without_obstacles = [(3, 0, 0, 'H')]
         steps, _, _ = find_optimal_winning_path(4, pieces_without_obstacles)
@@ -99,7 +94,34 @@ class TestPuzzleLogic(unittest.TestCase):
             pieces=[(2, 0, 0, 'H'), (0, 2, 1, 'E')]))
         self.assertIsNone(scenario.s_optimal)
         self.assertEqual(scenario.optimal_path, [])
-        self.assertEqual(scenario.step_summary, 'No route (fixed enemies)')
+        self.assertEqual(scenario.step_summary, 'Minimum: unverified')
+
+    def test_verified_minimum_is_loaded_without_recalculating(self) -> None:
+        from unittest.mock import patch
+        pieces = [(2, 0, 0, 'H'), (0, 0, 1, 'H')]
+        result = verify_puzzle(3, pieces, max_steps=3)
+        payload = dict(id='verified', board_size=3, pieces=pieces,
+                       s_optimal=result['steps'], optimal_path=result['path'],
+                       optimal_moves=result['moves'], verification_status=result['status'],
+                       verification_method=result['method'], verification_key=result['position_key'])
+        with patch('puzzle_logic.verify_puzzle') as verify, \
+                patch('puzzle_logic.find_optimal_winning_path') as static:
+            scenario = PuzzleScenario.from_dict(payload)
+        verify.assert_not_called()
+        static.assert_not_called()
+        self.assertEqual(scenario.s_optimal, 2)
+        self.assertEqual(scenario.s_max, 6)
+        self.assertTrue(scenario.optimal_moves)
+        self.assertEqual(scenario.to_dict()['verification_key'], puzzle_position_key(3, pieces))
+        self.assertEqual(PuzzleScenario.from_dict(scenario.to_dict()).s_optimal, 2)
+        payload['s_max'] = 1
+        self.assertEqual(PuzzleScenario.from_dict(payload).s_max, 6)
+
+        payload['pieces'] = [(2, 0, 0, 'H'), (0, 1, 1, 'E')]
+        stale = PuzzleScenario.from_dict(payload)
+        self.assertIsNone(stale.s_optimal)
+        self.assertEqual(stale.verification_status, 'UNVERIFIED')
+        self.assertEqual(stale.optimal_path, [])
 
     def test_minimum_selects_best_player_piece(self) -> None:
         steps, path, piece = find_optimal_winning_path(

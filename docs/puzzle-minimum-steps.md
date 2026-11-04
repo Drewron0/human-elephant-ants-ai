@@ -1,5 +1,7 @@
 # Calculate puzzle minimum steps — 2026-11-04
 
+Historical scope: superseded by `custom-stage-verification.md`. The latest requirement checks moving defenders at creation time, rather than using a stationary route as a winning proof.
+
 ## Problem
 Preset and older custom stages display stored step targets that were not calculated from their piece positions.
 

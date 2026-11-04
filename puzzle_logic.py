@@ -1,10 +1,18 @@
 import random
 import time
 import math
+import hashlib
 from collections import deque
 from typing import List, Tuple, Dict, Any, Optional
 from game_logic import GameState, Piece, BEATS, PREDATORS
 import storage
+
+
+def puzzle_position_key(board_size: int, pieces, target_coord=None) -> str:
+    """Bind a saved verification to this layout and the corner-win rules."""
+    target = target_coord or (0, board_size - 1)
+    position = ('corner_win_v1', board_size, target, tuple(sorted(tuple(p) for p in pieces)))
+    return hashlib.sha256(repr(position).encode()).hexdigest()
 
 
 def bfs_safe_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
@@ -165,7 +173,8 @@ def verify_puzzle(board_size: int, pieces: List[Tuple[int, int, int, str]],
     if any(a[1] != b[0] for a, b in zip(player_moves, player_moves[1:])):
         path = []  # A coordinate route cannot represent switches between player pieces.
     return {'status': 'VERIFIED', 'steps': int(steps), 'path': path, 'moves': moves,
-            'method': method, 'reason': 'Forced corner win verified against all legal replies'}
+            'method': method, 'reason': 'Forced corner win verified against all legal replies',
+            'position_key': puzzle_position_key(board_size, pieces, target)}
 
 
 def solve_adversarial_optimal_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
@@ -203,27 +212,36 @@ class PuzzleScenario:
                  pieces: Optional[List[Tuple[int, int, int, str]]] = None,
                  optimal_path: Optional[List[Tuple[int, int]]] = None,
                  is_custom: bool = False, verification_status: str = 'UNVERIFIED',
-                 verification_method: str = ''):
+                 verification_method: str = '', verification_key: str = '',
+                 optimal_moves: Optional[List[Any]] = None, move_limit: Optional[int] = None):
         self.id = id_str
         self.title = title
         self.description = description
         self.board_size = board_size
         self.pieces = pieces or []
-        # Stored counts/routes are legacy caches; always derive the baseline from the board.
-        self.s_optimal, self.optimal_path, _ = find_optimal_winning_path(board_size, self.pieces)
-        self.s_max = 3 * self.s_optimal if self.s_optimal is not None else 0
+        verified = (verification_status == 'VERIFIED'
+                    and verification_key == puzzle_position_key(board_size, self.pieces)
+                    and type(s_optimal) is int and s_optimal >= 0)
+        self.s_optimal = s_optimal if verified else None
+        self.optimal_path = (optimal_path or []) if verified else []
+        self.optimal_moves = (optimal_moves or []) if verified else []
+        if verified:
+            self.s_max = 3 * self.s_optimal
+        else:
+            self.s_max = move_limit if type(move_limit) is int and move_limit > 0 else 3 * board_size
         self.is_custom = is_custom
-        self.verification_status = verification_status
-        self.verification_method = verification_method
+        self.verification_status = 'VERIFIED' if verified else 'UNVERIFIED'
+        self.verification_method = verification_method if verified else ''
+        self.verification_key = verification_key if verified else ''
 
     @property
     def step_label(self) -> str:
-        return 'Minimum (fixed enemies)'
+        return 'Minimum (best defense)'
 
     @property
     def step_summary(self) -> str:
         if self.s_optimal is None:
-            return 'No route (fixed enemies)'
+            return 'Minimum: unverified'
         return f'{self.step_label}: {self.s_optimal} steps'
 
     def create_initial_state(self) -> GameState:
@@ -239,11 +257,14 @@ class PuzzleScenario:
             'description': self.description,
             'board_size': self.board_size,
             's_optimal': self.s_optimal,
+            's_max': self.s_max,
             'pieces': self.pieces,
             'optimal_path': self.optimal_path,
+            'optimal_moves': self.optimal_moves,
             'is_custom': self.is_custom,
             'verification_status': self.verification_status,
-            'verification_method': self.verification_method
+            'verification_method': self.verification_method,
+            'verification_key': self.verification_key
         }
 
     @staticmethod
@@ -253,16 +274,20 @@ class PuzzleScenario:
             title=data.get('title', 'Custom Stage'),
             description=data.get('description', ''),
             board_size=data.get('board_size', 6),
+            s_optimal=data.get('s_optimal'),
             pieces=[(p[0], p[1], p[2], p[3]) for p in data.get('pieces', [])],
             optimal_path=data.get('optimal_path', []),
+            optimal_moves=data.get('optimal_moves', []),
             is_custom=data.get('is_custom', True),
             verification_status=data.get('verification_status', 'UNVERIFIED'),
-            verification_method=data.get('verification_method', '')
+            verification_method=data.get('verification_method', ''),
+            verification_key=data.get('verification_key', ''),
+            move_limit=data.get('s_max')
         )
 
 
 # =====================================================================
-# PRACTICE STAGES: MINIMUM STEP COUNTS ARE CALCULATED FROM THEIR BOARDS
+# LEGACY PRACTICE STAGES: NO PROVEN MINIMUM UNTIL ADVERSARIAL VERIFICATION
 # =====================================================================
 
 PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
@@ -396,7 +421,8 @@ def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps:
         description=f"Sparse race: a forced corner win in exactly {steps} moves.",
         board_size=board_size, s_optimal=steps, pieces=pieces,
         optimal_path=proof['path'], verification_status='VERIFIED',
-        verification_method=proof['method'])
+        verification_method=proof['method'], verification_key=proof['position_key'],
+        optimal_moves=proof['moves'])
 
 
 def generate_benchmark_corpus(num_games: int = 1000, board_size: int = 11,
@@ -470,6 +496,9 @@ class PuzzleSession:
         self.neutralization_reason = ""
 
     def evaluate_status(self, state: GameState) -> str:
+        self.is_solved = False
+        self.is_neutralized = False
+        self.neutralization_reason = ''
         target = state.target_corners[0]
         ai_target = state.target_corners[1]
 
@@ -493,11 +522,6 @@ class PuzzleSession:
         if state.winner == 1:
             self.is_neutralized = True
             self.neutralization_reason = "AI reached home corner"
-            return 'NEUTRALIZED'
-
-        if self.s_optimal is None:
-            self.is_neutralized = True
-            self.neutralization_reason = 'No legal route with fixed enemies'
             return 'NEUTRALIZED'
 
         # Neutralization step limit check
@@ -525,7 +549,7 @@ class PuzzleSession:
             self.neutralization_reason = "No legal moves available (stalemate / blocked)"
             return 'NEUTRALIZED'
 
-        if self.current_attempt_steps > self.s_optimal:
+        if self.s_optimal is not None and self.current_attempt_steps > self.s_optimal:
             return 'DELAYED'
 
         return 'ON_TRACK'

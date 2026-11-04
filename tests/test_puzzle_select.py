@@ -158,7 +158,7 @@ class TestPuzzleSelect(unittest.TestCase):
         view.card_widgets = {puzzle.id: {'puzzle': puzzle}}
         view._update_sidebar()
         view.btn_play.config.assert_called_with(state='disabled')
-        self.assertIn('No route', view.lbl_selected_stats.config.call_args.kwargs['text'])
+        self.assertIn('unverified', view.lbl_selected_stats.config.call_args.kwargs['text'])
         view._start_selected_stage()
         self.app.start_puzzle.assert_not_called()
 

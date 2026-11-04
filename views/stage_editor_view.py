@@ -1,13 +1,27 @@
 import tkinter as tk
 from tkinter import ttk
 from typing import Dict, Any, List, Tuple, Optional
+import threading
+from queue import Queue, Empty
 
 from ui_theme import (
     THEME, FONT_NAME, ButtonPrimary, ButtonSecondary, ButtonDanger,
     ThemedModal, draw_star
 )
 import storage
-from puzzle_logic import find_optimal_winning_path, PuzzleScenario
+from puzzle_logic import verify_puzzle, puzzle_position_key
+
+
+VERIFICATION_MAX_STEPS = 14
+
+
+def _verify_stage(results, board_size, pieces):
+    try:
+        result = verify_puzzle(board_size, pieces, max_steps=VERIFICATION_MAX_STEPS,
+                               time_budget=10.0, node_budget=300000)
+    except Exception as exc:
+        result = {'status': 'ERROR', 'reason': str(exc)}
+    results.put((puzzle_position_key(board_size, pieces), result))
 
 
 class StageEditorView(tk.Frame):
@@ -49,6 +63,12 @@ class StageEditorView(tk.Frame):
         # Active palette selection tool
         self.active_tool: str = 'P1_E'
         self.last_verification: Optional[Dict[str, Any]] = None
+        self._verification_queue = Queue()
+        self._verification_running = False
+        self._verification_poll_id = None
+        self._verification_key = None
+        self._save_after_verification = False
+        self._closed = False
         self.current_sq_size: int = 70
         self._resize_job = None
 
@@ -172,10 +192,10 @@ class StageEditorView(tk.Frame):
         self.lbl_verify_status = tk.Label(self.box_verification, text="Winnability: Unverified", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=THEME['warning'])
         self.lbl_verify_status.pack(anchor="w")
 
-        self.lbl_verify_detail = tk.Label(self.box_verification, text="Click verify to check safe path.", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'], wraplength=270, justify="left")
+        self.lbl_verify_detail = tk.Label(self.box_verification, text="Verify the initial position against best defense before saving.", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'], wraplength=270, justify="left")
         self.lbl_verify_detail.pack(anchor="w", pady=(2, 4))
 
-        ButtonSecondary(self.box_verification, text="Verify Winnability (BFS)", command=self._verify_winnability).pack(anchor="w")
+        ButtonSecondary(self.box_verification, text="Verify Winnability (Minimax)", command=self._verify_winnability).pack(anchor="w")
 
         # Bottom Actions
         ButtonPrimary(content, text="Save Stage", command=self._save_stage).pack(fill=tk.X, pady=(0, 4))
@@ -330,53 +350,81 @@ class StageEditorView(tk.Frame):
 
     def _invalidate_verification(self):
         self.last_verification = None
+        self._save_after_verification = False
         self.lbl_verify_status.config(text="Winnability: Unverified", fg=THEME['warning'])
-        self.lbl_verify_detail.config(text="Board changed. Click verify to check safe path.")
+        self.lbl_verify_detail.config(text="Board changed. Verify the new position before saving.")
 
-    def _verify_winnability(self, silent: bool = False) -> bool:
-        target_coord = (0, self.board_size - 1)
+    def _verify_winnability(self, silent: bool = False):
         pieces_list = [(r, c, owner, pt) for (r, c), (owner, pt) in self.placed_pieces.items()]
-
-        player_pieces = [p for p in pieces_list if p[2] == 0]
-        if not player_pieces:
+        if not any(p[2] == 0 for p in pieces_list):
             self.lbl_verify_status.config(text="Status: No Player Pieces", fg=THEME['danger'])
             self.lbl_verify_detail.config(text="Place at least one green Player piece on the board.")
-            return False
+            return
+        key = puzzle_position_key(self.board_size, pieces_list)
+        if self._verification_running:
+            if key == self._verification_key:
+                self._save_after_verification |= silent
+            else:
+                self.lbl_verify_detail.config(text="The previous layout is still being checked. Verify this layout again when it finishes.")
+            return
+        self.last_verification = None
+        self._verification_running = True
+        self._verification_key = key
+        self._save_after_verification = silent
+        self.lbl_verify_status.config(text="Status: CHECKING BEST DEFENSE", fg=THEME['accent'])
+        self.lbl_verify_detail.config(text=f"Checking up to {VERIFICATION_MAX_STEPS} player moves. Only a proven minimum can be saved.")
+        try:
+            threading.Thread(target=_verify_stage,
+                             args=(self._verification_queue, self.board_size, pieces_list),
+                             daemon=True).start()
+        except RuntimeError as exc:
+            self._verification_running = False
+            self._save_after_verification = False
+            self.lbl_verify_status.config(text="Status: UNVERIFIED", fg=THEME['warning'])
+            self.lbl_verify_detail.config(text=str(exc))
+            return
+        self._verification_poll_id = self.after(100, self._poll_verification)
 
-        d, path, best_pc = find_optimal_winning_path(self.board_size, pieces_list, target_coord)
-
-        if d is not None:
-            s_max = 3 * d
-            piece_name = {'H': 'Human', 'E': 'Elephant', 'A': 'Ant'}.get(best_pc[2], best_pc[2]) if best_pc else "Piece"
-            self.last_verification = {'winnable': True, 's_optimal': d, 'path': path, 'best_piece': best_pc}
-            self.lbl_verify_status.config(text=f"Status: WINNABLE ({d} Steps)", fg=THEME['success'])
-            self.lbl_verify_detail.config(text=f"Minimum with fixed enemies: {d} moves. Move limit: {s_max} moves.")
-            if not silent:
-                modal = ThemedModal(self, "Verification Successful", min_width=340)
-                tk.Label(modal.body, text=f"Legal route found with fixed enemies.\nMinimum Steps: {d}\nMove Limit: {s_max}", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['text'], justify="center").pack(pady=10)
-                ButtonPrimary(modal.footer, text="Understood", command=modal.dismiss).pack(side=tk.RIGHT)
-            return True
+    def _poll_verification(self):
+        self._verification_poll_id = None
+        if self._closed:
+            return
+        try:
+            key, result = self._verification_queue.get_nowait()
+        except Empty:
+            self._verification_poll_id = self.after(100, self._poll_verification)
+            return
+        self._verification_running = False
+        save_after = self._save_after_verification
+        self._save_after_verification = False
+        pieces = [(r, c, owner, pt) for (r, c), (owner, pt) in self.placed_pieces.items()]
+        if key != puzzle_position_key(self.board_size, pieces):
+            self._invalidate_verification()
+            return
+        if result['status'] == 'VERIFIED':
+            self.last_verification = result
+            steps = result['steps']
+            self.lbl_verify_status.config(text=f"Status: WINNABLE ({steps} Steps)", fg=THEME['success'])
+            self.lbl_verify_detail.config(text=f"Initial position wins against every legal defense. Minimum: {steps} player moves. Move limit: {3 * steps}.")
+            if save_after:
+                self._save_stage()
         else:
-            self.last_verification = {'winnable': False, 's_optimal': 0, 'path': [], 'best_piece': None}
-            self.lbl_verify_status.config(text="Status: NO ROUTE", fg=THEME['warning'])
-            self.lbl_verify_detail.config(text="No player piece can reach the corner with the other pieces fixed.")
-            if not silent:
-                modal = ThemedModal(self, "Verification Failed", min_width=340)
-                tk.Label(modal.body, text="No legal route to the corner with the other pieces fixed.\nAdjust the layout and verify again.", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['warning'], justify="center").pack(pady=10)
-                ButtonPrimary(modal.footer, text="Close", command=modal.dismiss).pack(side=tk.RIGHT)
-            return False
+            self.last_verification = None
+            status = 'NO WIN WITHIN HORIZON' if result['status'] == 'NO_WIN_WITHIN_LIMIT' else 'UNVERIFIED'
+            self.lbl_verify_status.config(text=f"Status: {status}", fg=THEME['warning'])
+            self.lbl_verify_detail.config(text=f"Not saved. {result['reason']}. No minimum assigned.")
 
     def _save_stage(self):
-        if not self._verify_winnability(silent=True):
-            modal = ThemedModal(self, "Cannot Save Unverified Stage", min_width=360)
-            tk.Label(modal.body, text="Stage needs a legal route to the corner before saving.\nAdjust the layout and verify again.", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['danger']).pack(pady=10)
-            ButtonPrimary(modal.footer, text="Understood", command=modal.dismiss).pack(side=tk.RIGHT)
+        pieces_list = [(r, c, owner, pt) for (r, c), (owner, pt) in self.placed_pieces.items()]
+        if (not self.last_verification
+                or self.last_verification.get('status') != 'VERIFIED'
+                or self.last_verification.get('position_key') != puzzle_position_key(self.board_size, pieces_list)):
+            self._verify_winnability(silent=True)
             return
 
         title = self.var_title.get().strip() or "Custom Stage"
         desc = self.var_desc.get().strip() or "Custom tactical scenario."
-        pieces_list = [(r, c, owner, pt) for (r, c), (owner, pt) in self.placed_pieces.items()]
-        s_opt = self.last_verification['s_optimal']
+        s_opt = self.last_verification['steps']
         path = self.last_verification['path']
 
         payload = {
@@ -387,8 +435,10 @@ class StageEditorView(tk.Frame):
             's_optimal': s_opt,
             'pieces': pieces_list,
             'optimal_path': path,
-            'verification_status': 'STATIC_PATH',
-            'verification_method': 'static_bfs',
+            'optimal_moves': self.last_verification['moves'],
+            'verification_status': 'VERIFIED',
+            'verification_method': self.last_verification['method'],
+            'verification_key': self.last_verification['position_key'],
             'is_custom': True
         }
 
@@ -410,6 +460,10 @@ class StageEditorView(tk.Frame):
         ButtonDanger(modal.footer, text="Delete", command=confirm).pack(side=tk.RIGHT)
 
     def _cleanup(self):
+        self._closed = True
+        if self._verification_poll_id is not None:
+            self.after_cancel(self._verification_poll_id)
+            self._verification_poll_id = None
         self._unbind_shortcuts()
         if self._resize_job is not None:
             try:
