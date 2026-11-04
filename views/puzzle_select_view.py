@@ -1,53 +1,25 @@
 import tkinter as tk
-import threading
-from queue import Empty
 from tkinter import ttk
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 
 from ui_theme import (
     THEME, FONT_NAME, ButtonPrimary, ButtonSecondary, ButtonDanger,
     draw_board_thumbnail, ThemedModal, bind_mousewheel
 )
 import storage
-from puzzle_logic import (
-    PuzzleScenario, PRECONFIGURED_STAGES_6X6, PRECONFIGURED_STAGES_9X9,
-    get_all_puzzles, generate_winnable_puzzle
-)
-
-
-def _generate_random_challenges(results):
-    try:
-        puzzles = [
-            generate_winnable_puzzle(board_size=6, min_steps=5, max_steps=7),
-            generate_winnable_puzzle(board_size=7, min_steps=6, max_steps=8),
-            generate_winnable_puzzle(board_size=8, min_steps=7, max_steps=10)
-        ]
-        results.put((puzzles, None))
-    except Exception as exc:
-        results.put((None, str(exc) or type(exc).__name__))
+from puzzle_logic import get_all_puzzles
 
 
 class PuzzleSelectView(tk.Frame):
-    """
-    Stage Selection View for preset tactical puzzle scenarios.
-    Displays curated puzzle stages with board thumbnails, difficulty picker,
-    and stage leaderboards.
-    """
+    """Browse and play stages saved by the user in the custom stage editor."""
     def __init__(self, parent, app):
         super().__init__(parent, bg=THEME['bg'])
         self.app = app
-        self.all_puzzles = get_all_puzzles()
-        self.active_category = "preset_6x6"
-        self.selected_puzzle_id: str = "stage_6x6_01"
+        self.selected_puzzle_id: str = ""
         self.card_widgets: Dict[str, Dict[str, Any]] = {}
-        self._random_poll_id = None
-        self._closed = False
 
         self._build_ui()
         self._populate_grid()
-        self._update_sidebar()
-        if hasattr(self.app, 'random_challenge_loading') and self.app.random_challenge_loading:
-            self._poll_random_challenges()
 
     def _build_ui(self):
         # Header bar
@@ -59,14 +31,14 @@ class PuzzleSelectView(tk.Frame):
 
         tk.Label(
             title_box,
-            text="Tactical Puzzles & Stages",
+            text="Custom Puzzle Stages",
             font=(FONT_NAME, 13, "bold"),
             bg=THEME['surface'],
             fg=THEME['text']
         ).pack(side=tk.LEFT)
 
         ButtonSecondary(top_bar, text="Back to Main Menu", command=lambda: self.app.show_view('menu')).pack(side=tk.RIGHT, padx=16, pady=8)
-        ButtonPrimary(top_bar, text="+ Create Custom Stage", command=lambda: self.app.show_view('stage_editor')).pack(side=tk.RIGHT, padx=(0, 8), pady=8)
+        ButtonPrimary(top_bar, text="+ Create Custom Stage", command=self._open_stage_editor).pack(side=tk.RIGHT, padx=(0, 8), pady=8)
 
         # Paned window container
         self.paned = tk.PanedWindow(self, orient=tk.HORIZONTAL, bg=THEME['border'], sashrelief=tk.FLAT, sashwidth=4, bd=0)
@@ -75,22 +47,6 @@ class PuzzleSelectView(tk.Frame):
         # Catalog pane
         self.left_pane = tk.Frame(self.paned, bg=THEME['bg'])
         self.paned.add(self.left_pane, minsize=480, stretch="always")
-
-        # Category filter tabs for preset stages
-        tab_frame = tk.Frame(self.left_pane, bg=THEME['surface_card'], padx=6, pady=4)
-        tab_frame.pack(fill=tk.X, padx=16, pady=(12, 8))
-
-        self.btn_tab_preset = ButtonSecondary(tab_frame, text="Standard (6x6)", command=lambda: self._set_category("preset_6x6"))
-        self.btn_tab_preset.pack(side=tk.LEFT, padx=3)
-
-        self.btn_tab_9x9 = ButtonSecondary(tab_frame, text="Large Board (9x9)", command=lambda: self._set_category("preset_9x9"))
-        self.btn_tab_9x9.pack(side=tk.LEFT, padx=3)
-
-        self.btn_tab_custom = ButtonSecondary(tab_frame, text="Custom Stages", command=lambda: self._set_category("custom"))
-        self.btn_tab_custom.pack(side=tk.LEFT, padx=3)
-
-        self.btn_tab_random = ButtonSecondary(tab_frame, text="Random Challenge", command=lambda: self._set_category("random"))
-        self.btn_tab_random.pack(side=tk.LEFT, padx=3)
 
         # Scrollable grid of stage thumbnails
         grid_container = tk.Frame(self.left_pane, bg=THEME['bg'])
@@ -215,102 +171,21 @@ class PuzzleSelectView(tk.Frame):
         self.box_leaderboard = tk.Frame(content, bg=THEME['surface_light'], padx=8, pady=6, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
         self.box_leaderboard.pack(fill=tk.X)
 
-        self._refresh_stage_leaderboard()
 
     def _on_canvas_configure(self, event):
         self.grid_canvas.itemconfig(self.canvas_window, width=event.width)
-
-    def _set_category(self, cat: str):
-        self.active_category = cat
-        self._highlight_active_tab()
-        start_job = (cat == 'random' and getattr(self.app, 'random_challenges', None) is None
-                     and not getattr(self.app, 'random_challenge_loading', False))
-        if start_job:
-            self.app.random_challenge_loading = True
-            self.app.random_challenge_error = None
-        self._populate_grid()
-        if start_job:
-            try:
-                threading.Thread(target=_generate_random_challenges,
-                                 args=(self.app.random_challenge_queue,), daemon=True).start()
-            except Exception as exc:
-                self.app.random_challenge_queue.put((None, str(exc) or type(exc).__name__))
-                self.app.random_challenge_loading = False
-                self.app.random_challenge_error = str(exc) or type(exc).__name__
-                self._populate_grid()
-        if getattr(self.app, 'random_challenge_loading', False) and self._random_poll_id is None:
-            self._poll_random_challenges()
-
-    def _poll_random_challenges(self):
-        if self._closed:
-            return
-        self._random_poll_id = None
-        try:
-            puzzles, error = self.app.random_challenge_queue.get_nowait()
-        except Empty:
-            if getattr(self.app, 'random_challenge_loading', False):
-                self._random_poll_id = self.after(100, self._poll_random_challenges)
-            return
-
-        self.app.random_challenges = puzzles
-        self.app.random_challenge_error = error
-        self.app.random_challenge_loading = False
-        if self.active_category == 'random':
-            self._populate_grid()
-
-    def _highlight_active_tab(self):
-        tabs = [
-            ("preset_6x6", self.btn_tab_preset),
-            ("preset_9x9", self.btn_tab_9x9)
-        ]
-        if hasattr(self, 'btn_tab_custom'):
-            tabs.append(("custom", self.btn_tab_custom))
-        if hasattr(self, 'btn_tab_random'):
-            tabs.append(("random", self.btn_tab_random))
-
-        for c, btn in tabs:
-            if c == self.active_category:
-                btn.config(bg=THEME['accent'], fg='#FFFFFF')
-            else:
-                btn.config(bg=THEME['surface_light'], fg=THEME['text'])
 
     def _populate_grid(self):
         for widget in self.scrollable_grid.winfo_children():
             widget.destroy()
         self.card_widgets.clear()
 
-        if self.active_category == "preset_6x6":
-            puzzles = list(PRECONFIGURED_STAGES_6X6.values())
-            self.btn_play.config(state='normal')
-        elif self.active_category == "preset_9x9":
-            puzzles = list(PRECONFIGURED_STAGES_9X9.values())
-            self.btn_play.config(state='normal')
-        elif self.active_category == "custom":
-            puzzles = [p for p in get_all_puzzles().values() if p.is_custom]
-            self.btn_play.config(state='normal')
-        else:
-            puzzles = getattr(self.app, 'random_challenges', None)
-            if puzzles is None:
-                self.selected_puzzle_id = ''
-                message = 'Creating Random Challenge.....'
-                if getattr(self.app, 'random_challenge_error', None):
-                    message = (f'Could not create random challenges: {self.app.random_challenge_error}\n'
-                               'Select Random Challenge again to retry.')
-                tk.Label(self.scrollable_grid, text=message, font=(FONT_NAME, 11),
-                         bg=THEME['bg'], fg=THEME['text_muted'], wraplength=420).grid(
-                             row=0, column=0, columnspan=3, pady=40)
-                self.grid_canvas.yview_moveto(0)
-                self.btn_play.config(state='disabled')
-                self.lbl_selected_stats.config(text='')
-                self.frame_custom_actions.pack_forget()
-                for widget in self.box_leaderboard.winfo_children():
-                    widget.destroy()
-                return
-
+        puzzles = list(get_all_puzzles().values())
         if not puzzles:
-            msg_frame = tk.Frame(self.scrollable_grid, bg=THEME['bg'])
-            msg_frame.pack(fill=tk.BOTH, expand=True, pady=40)
-            tk.Label(msg_frame, text="No stages found in this category.", font=(FONT_NAME, 11), bg=THEME['bg'], fg=THEME['text_muted']).pack()
+            self.selected_puzzle_id = ''
+            tk.Label(self.scrollable_grid, text="No custom stages yet.\nCreate a custom stage to start playing.",
+                     font=(FONT_NAME, 11), bg=THEME['bg'], fg=THEME['text_muted']).pack(pady=40)
+            self._update_sidebar()
             return
 
         if self.selected_puzzle_id not in [p.id for p in puzzles]:
@@ -378,28 +253,26 @@ class PuzzleSelectView(tk.Frame):
                 card.config(highlightbackground=THEME['border'], highlightthickness=1)
 
     def _update_sidebar(self):
-        puzzle = None
-        if self.selected_puzzle_id in self.card_widgets:
-            puzzle = self.card_widgets[self.selected_puzzle_id]['puzzle']
-        else:
-            all_p = get_all_puzzles()
-            puzzle = all_p.get(self.selected_puzzle_id) or list(PRECONFIGURED_STAGES_6X6.values())[0]
-
+        puzzle = self.card_widgets.get(self.selected_puzzle_id, {}).get('puzzle')
         if not puzzle:
+            self.lbl_selected_title.config(text='No custom stage selected')
+            self.lbl_selected_desc.config(text='Create a custom stage using the button above.')
+            self.lbl_selected_stats.config(text='')
+            self.btn_play.config(state='disabled')
+            self.frame_custom_actions.pack_forget()
+            for widget in self.box_leaderboard.winfo_children():
+                widget.destroy()
             return
 
         self.lbl_selected_title.config(text=puzzle.title)
         self.lbl_selected_desc.config(text=puzzle.description or "Tactical puzzle scenario.")
         details = f"{puzzle.board_size}x{puzzle.board_size} Board | {puzzle.step_summary}\nMove Limit: {puzzle.s_max}"
-        if puzzle.is_custom and puzzle.s_optimal is None:
+        if puzzle.s_optimal is None:
             details += '\nEdit and verify this stage before playing.'
         self.lbl_selected_stats.config(text=details)
-        self.btn_play.config(state='disabled' if puzzle.is_custom and puzzle.s_optimal is None else 'normal')
+        self.btn_play.config(state='disabled' if puzzle.s_optimal is None else 'normal')
 
-        if getattr(puzzle, 'is_custom', False):
-            self.frame_custom_actions.pack(fill=tk.X, pady=(0, 8))
-        else:
-            self.frame_custom_actions.pack_forget()
+        self.frame_custom_actions.pack(fill=tk.X, pady=(0, 8))
 
         self._refresh_stage_leaderboard()
 
@@ -447,10 +320,12 @@ class PuzzleSelectView(tk.Frame):
 
     def _edit_selected_stage(self):
         puzzle = self.card_widgets.get(self.selected_puzzle_id, {}).get('puzzle')
-        if puzzle and getattr(puzzle, 'is_custom', False):
+        if puzzle:
             self.app.show_view('stage_editor', edit_stage=puzzle.to_dict())
 
     def _delete_selected_stage(self):
+        if self.selected_puzzle_id not in self.card_widgets:
+            return
         modal = ThemedModal(self, "Delete Custom Stage", min_width=360)
         tk.Label(
             modal.body,
@@ -463,20 +338,14 @@ class PuzzleSelectView(tk.Frame):
         def confirm():
             modal.dismiss()
             storage.delete_custom_stage(self.selected_puzzle_id)
-            self._set_category(self.active_category)
+            self._populate_grid()
 
         ButtonSecondary(modal.footer, text="Cancel", command=modal.dismiss).pack(side=tk.LEFT)
         ButtonDanger(modal.footer, text="Delete Stage", command=confirm).pack(side=tk.RIGHT)
 
     def _start_selected_stage(self):
-        if self.active_category == 'random' and not self.card_widgets:
-            return
         puzzle = self.card_widgets.get(self.selected_puzzle_id, {}).get('puzzle')
-        if not puzzle:
-            all_p = get_all_puzzles()
-            puzzle = all_p.get(self.selected_puzzle_id) or list(PRECONFIGURED_STAGES_6X6.values())[0]
-
-        if puzzle.is_custom and puzzle.s_optimal is None:
+        if not puzzle or puzzle.s_optimal is None:
             return
 
         p_name = self.var_player_name.get().strip() or "Player 1"
@@ -512,13 +381,3 @@ class PuzzleSelectView(tk.Frame):
         }
 
         self.app.start_puzzle(config)
-
-    def _cleanup(self):
-        self._closed = True
-        if self._random_poll_id is not None:
-            self.after_cancel(self._random_poll_id)
-            self._random_poll_id = None
-
-    def destroy(self):
-        self._cleanup()
-        super().destroy()

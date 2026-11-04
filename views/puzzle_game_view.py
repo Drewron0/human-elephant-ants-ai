@@ -8,7 +8,7 @@ from ui_theme import (
     ThemedModal, draw_star, bind_mousewheel
 )
 from game_logic import GameState, Piece
-from puzzle_logic import PuzzleScenario, PuzzleSession, PRECONFIGURED_PUZZLES, generate_winnable_puzzle, make_puzzle_move
+from puzzle_logic import PuzzleSession, get_all_puzzles, make_puzzle_move
 from ai_engine import get_defender_move, DEFAULT_EVALUATION_WEIGHTS
 import storage
 
@@ -25,15 +25,11 @@ class PuzzleGameView(tk.Frame):
         self.config = dict(config)
 
         # Initialize Scenario & Session
-        scenario_key = config.get('puzzle_scenario', 'stage_6x6_01')
-        custom_obj = config.get('custom_scenario_obj')
-
-        if custom_obj:
-            self.scenario = custom_obj
-        elif scenario_key in PRECONFIGURED_PUZZLES:
-            self.scenario = PRECONFIGURED_PUZZLES[scenario_key]
-        else:
-            self.scenario = generate_winnable_puzzle(board_size=config.get('board_size', 6))
+        self.scenario = config.get('custom_scenario_obj')
+        if self.scenario is None:
+            self.scenario = get_all_puzzles().get(config.get('puzzle_scenario'))
+        if self.scenario is None:
+            raise ValueError('Select an existing custom stage before playing')
 
         self.show_metrics = self.config.get('show_metrics', False)
         self.session = PuzzleSession(self.scenario, show_metrics=self.show_metrics)

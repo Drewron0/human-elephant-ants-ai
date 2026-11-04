@@ -6,9 +6,6 @@ from game_logic import GameState, Piece, BEATS, PREDATORS, TARGET_CORNERS
 from puzzle_logic import (
     bfs_safe_path,
     find_optimal_winning_path,
-    generate_winnable_puzzle,
-    PRECONFIGURED_STAGES_6X6,
-    PRECONFIGURED_PUZZLES,
     make_puzzle_move,
     verify_puzzle,
     puzzle_position_key,
@@ -53,15 +50,7 @@ class TestGameLogic(unittest.TestCase):
 
 
 class TestPuzzleLogic(unittest.TestCase):
-    # Tests BFS safe path search, preset stages, and random puzzle generation
-    def test_uncertified_presets_do_not_claim_a_minimum(self) -> None:
-        for stage_key, scenario in PRECONFIGURED_PUZZLES.items():
-            with self.subTest(stage=stage_key):
-                self.assertIsNone(scenario.s_optimal)
-                self.assertEqual(scenario.optimal_path, [])
-                self.assertEqual(scenario.verification_status, 'UNVERIFIED')
-                self.assertEqual(scenario.step_summary, 'Minimum: unverified')
-
+    # Tests minimum-step verification and the benchmark puzzle generator
     def test_minimum_counts_obstacle_detour_and_ignores_stale_saved_count(self) -> None:
         pieces = [(3, 0, 0, 'H')] + [(1, c, 1, 'E') for c in range(3)]
         scenario = PuzzleScenario.from_dict(dict(
@@ -131,14 +120,6 @@ class TestPuzzleLogic(unittest.TestCase):
         self.assertEqual(path[0], (2, 3))
         self.assertEqual(path[-1], (0, 5))
 
-    def test_random_winnable_generator(self) -> None:
-        for _ in range(3):
-            scenario = generate_winnable_puzzle(board_size=6, min_steps=5, max_steps=8)
-            target = (0, scenario.board_size - 1)
-            d, path, best_pc = find_optimal_winning_path(scenario.board_size, scenario.pieces, target)
-            self.assertIsNotNone(path)
-            self.assertIsNotNone(d)
-            self.assertGreaterEqual(d, 3)
 
 
 class TestStorageCRUD(unittest.TestCase):

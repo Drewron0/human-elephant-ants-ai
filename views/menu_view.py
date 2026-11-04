@@ -69,7 +69,7 @@ class MainMenuView(tk.Frame):
 
             ButtonSecondary(
                 card,
-                text="Puzzle Practice",
+                text="Custom Puzzles",
                 command=lambda: self.app.show_view('puzzle_select'),
                 width=w
             ).pack(pady=4)

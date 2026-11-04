@@ -1,7 +1,7 @@
 """Report bounded adversarial verification without turning an unknown result into a proof."""
 import argparse
 
-from puzzle_logic import PRECONFIGURED_PUZZLES, generate_benchmark_corpus, verify_puzzle
+from puzzle_logic import get_all_puzzles, generate_benchmark_corpus, verify_puzzle
 
 
 def main(argv=None):
@@ -11,7 +11,7 @@ def main(argv=None):
     parser.add_argument('--node-budget', type=int, default=30000)
     parser.add_argument('--generated-only', action='store_true')
     args = parser.parse_args(argv)
-    scenarios = [] if args.generated_only else list(PRECONFIGURED_PUZZLES.values())
+    scenarios = [] if args.generated_only else list(get_all_puzzles().values())
     scenarios += generate_benchmark_corpus(args.samples)
     unknown = failed = False
     for scenario in scenarios:

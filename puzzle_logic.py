@@ -286,152 +286,45 @@ class PuzzleScenario:
         )
 
 
-# =====================================================================
-# LEGACY PRACTICE STAGES: NO PROVEN MINIMUM UNTIL ADVERSARIAL VERIFICATION
-# =====================================================================
-
-PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
-    'stage_6x6_01': PuzzleScenario(
-        id_str='stage_6x6_01',
-        title='Stage 1: Advance Guard',
-        description='Coordinate Human and Elephant to advance past dispersed defenders.',
-        board_size=6,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (2, 4, 1, 'H'), (3, 3, 1, 'A')]
-    ),
-    'stage_6x6_02': PuzzleScenario(
-        id_str='stage_6x6_02',
-        title='Stage 2: Flank Escort',
-        description='Ant screens against AI Elephant while Human heads toward the corner.',
-        board_size=6,
-        pieces=[(5, 0, 0, 'H'), (4, 0, 0, 'A'), (2, 3, 1, 'A'), (4, 5, 1, 'E')]
-    ),
-    'stage_6x6_03': PuzzleScenario(
-        id_str='stage_6x6_03',
-        title='Stage 3: The Pincer',
-        description='Dual-front pressure with Human and Ant forcing enemy sentries to retreat.',
-        board_size=6,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'A'), (0, 3, 1, 'E'), (1, 4, 1, 'A')]
-    ),
-    'stage_6x6_04': PuzzleScenario(
-        id_str='stage_6x6_04',
-        title='Stage 4: Sentry Gate',
-        description='Heavy Elephants defend perimeter. Use Elephant escort through the gap.',
-        board_size=6,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 0, 0, 'A'), (1, 4, 1, 'E'), (2, 3, 1, 'H'), (3, 2, 1, 'A')]
-    ),
-    'stage_6x6_05': PuzzleScenario(
-        id_str='stage_6x6_05',
-        title='Stage 5: Crossfire Defense',
-        description='Ant maneuvers around central Elephant threat to pierce defensive lines.',
-        board_size=6,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'A'), (3, 2, 1, 'E'), (2, 4, 1, 'H')]
-    ),
-    'stage_6x6_06': PuzzleScenario(
-        id_str='stage_6x6_06',
-        title='Stage 6: The Chokepoint',
-        description='Elephant escort anchors the center while advancing toward objective.',
-        board_size=6,
-        pieces=[(5, 0, 0, 'H'), (4, 1, 0, 'E'), (2, 2, 1, 'E'), (2, 4, 1, 'A')]
-    ),
-    'stage_6x6_07': PuzzleScenario(
-        id_str='stage_6x6_07',
-        title='Stage 7: The Ridge',
-        description='Elephant pushes through outer corridor to bypass layered barricade.',
-        board_size=6,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 1, 0, 'A'), (1, 3, 1, 'E'), (2, 4, 1, 'H'), (0, 3, 1, 'A')]
-    ),
-    'stage_6x6_08': PuzzleScenario(
-        id_str='stage_6x6_08',
-        title='Stage 8: Patrol Infiltration',
-        description='Elephant squad threads between patrol zones along the edge.',
-        board_size=6,
-        pieces=[(5, 0, 0, 'H'), (4, 0, 0, 'E'), (5, 2, 0, 'A'), (2, 2, 1, 'E'), (1, 4, 1, 'H'), (3, 4, 1, 'A')]
-    ),
-    'stage_6x6_09': PuzzleScenario(
-        id_str='stage_6x6_09',
-        title='Stage 9: Corridor Sweep',
-        description='Double defender line blocks diagonal. Navigate around outer perimeter.',
-        board_size=6,
-        pieces=[(5, 0, 0, 'H'), (4, 1, 0, 'E'), (5, 2, 0, 'A'), (1, 4, 1, 'E'), (3, 3, 1, 'A'), (2, 5, 1, 'H')]
-    ),
-    'stage_6x6_10': PuzzleScenario(
-        id_str='stage_6x6_10',
-        title='Stage 10: The Citadel',
-        description='Full multi-piece tactical engagement demanding optimal piece synergy.',
-        board_size=6,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 0, 0, 'A'), (3, 3, 1, 'E'), (2, 3, 1, 'E'), (1, 4, 1, 'E'), (2, 4, 1, 'A'), (3, 1, 1, 'H')]
-    )
-}
-
-# Classic Benchmark Scenarios
-PRECONFIGURED_STAGES_9X9: Dict[str, PuzzleScenario] = {
-    'p10_proposal': PuzzleScenario(
-        id_str='p10_proposal',
-        title='Tactical Benchmark (9x9)',
-        description='Tactical engagement. AI acts as optimal defender.',
-        board_size=9,
-        pieces=[(8, 0, 0, 'H'), (8, 1, 0, 'E'), (7, 0, 0, 'A'), (2, 2, 1, 'A'), (2, 5, 1, 'E'), (4, 3, 1, 'E'), (6, 6, 1, 'H')]
-    ),
-    'p12_labyrinth': PuzzleScenario(
-        id_str='p12_labyrinth',
-        title='Grand Labyrinth (9x9)',
-        description='Extended defense perimeter requiring cooperative piece maneuvering.',
-        board_size=9,
-        pieces=[(8, 0, 0, 'H'), (8, 2, 0, 'E'), (7, 0, 0, 'A'), (8, 3, 1, 'A'), (3, 5, 1, 'E'), (5, 2, 1, 'E')]
-    )
-}
-
-# Unified dictionary for backward compatibility
-PRECONFIGURED_PUZZLES: Dict[str, PuzzleScenario] = {
-    **PRECONFIGURED_STAGES_6X6,
-    **PRECONFIGURED_STAGES_9X9
-}
-
-
 def get_all_puzzles() -> Dict[str, PuzzleScenario]:
-    """Returns all preset stages and custom saved stages from storage."""
-    all_puzzles = dict(PRECONFIGURED_PUZZLES)
+    """Return only user-created stages from custom-stage storage."""
+    all_puzzles = {}
     custom_list = storage.get_custom_stages()
     for item in custom_list:
         try:
             scen = PuzzleScenario.from_dict(item)
+            scen.is_custom = True
             all_puzzles[scen.id] = scen
         except Exception as e:
             print(f"Error loading custom stage: {e}")
     return all_puzzles
 
 
-def generate_winnable_puzzle(board_size: int = 6, min_steps: int = 5, max_steps: int = 9,
-                             max_attempts: int = 100, rng=None) -> PuzzleScenario:
-    """Generate a sparse race puzzle with an exact geometric winning certificate."""
-    if not 1 <= min_steps <= max_steps or board_size <= min_steps or max_attempts < 1:
-        raise ValueError("Use a board at least min_steps + 1 squares wide")
-    rng = rng or random
-    steps = rng.randint(min_steps, min(max_steps, board_size - 1))
-    suit = rng.choice(list(BEATS))
-    start = (steps, rng.randrange(max(0, board_size - 1 - steps), board_size))
-    columns = rng.sample(range(board_size - 1), rng.randint(1, min(3, board_size - 1)))
-    pieces = [(start[0], start[1], 0, suit)] + [(0, c, 1, BEATS[suit]) for c in columns]
-    proof = verify_puzzle(board_size, pieces, max_steps=steps)
-    if proof['status'] != 'VERIFIED' or proof['steps'] != steps:
-        raise RuntimeError("Generated puzzle failed verification")
-    return PuzzleScenario(
-        id_str=f"race_{board_size}_{start[0]}_{start[1]}_{suit}_{'_'.join(map(str, columns))}",
-        title=f"Random Challenge ({steps} Steps)",
-        description=f"Sparse race: a forced corner win in exactly {steps} moves.",
-        board_size=board_size, s_optimal=steps, pieces=pieces,
-        optimal_path=proof['path'], verification_status='VERIFIED',
-        verification_method=proof['method'], verification_key=proof['position_key'],
-        optimal_moves=proof['moves'])
-
-
 def generate_benchmark_corpus(num_games: int = 1000, board_size: int = 11,
                                seed: int = 2026) -> List[PuzzleScenario]:
-    """The same seed produces the same random 10-step positions for every model."""
+    """Generate the seeded, certified 10-step positions used by the benchmark lab."""
     if num_games < 1 or board_size < 11:
         raise ValueError("Benchmark needs at least one game and a board size of 11 or greater")
     rng = random.Random(seed)
-    return [generate_winnable_puzzle(board_size, 10, 10, rng=rng) for _ in range(num_games)]
+    corpus = []
+    for _ in range(num_games):
+        steps = rng.randint(10, 10)  # Preserve the RNG stream of existing benchmark seeds.
+        suit = rng.choice(list(BEATS))
+        start = (steps, rng.randrange(board_size - 1 - steps, board_size))
+        columns = rng.sample(range(board_size - 1), rng.randint(1, min(3, board_size - 1)))
+        pieces = [(start[0], start[1], 0, suit)] + [(0, c, 1, BEATS[suit]) for c in columns]
+        proof = verify_puzzle(board_size, pieces, max_steps=steps)
+        if proof['status'] != 'VERIFIED' or proof['steps'] != steps:
+            raise RuntimeError("Generated benchmark puzzle failed verification")
+        corpus.append(PuzzleScenario(
+            id_str=f"race_{board_size}_{start[0]}_{start[1]}_{suit}_{'_'.join(map(str, columns))}",
+            title=f"Benchmark Race ({steps} Steps)",
+            description=f"Sparse race: a forced corner win in exactly {steps} moves.",
+            board_size=board_size, s_optimal=steps, pieces=pieces,
+            optimal_path=proof['path'], optimal_moves=proof['moves'],
+            verification_status=proof['status'], verification_method=proof['method'],
+            verification_key=proof['position_key']))
+    return corpus
 
 
 class PuzzleSession:
