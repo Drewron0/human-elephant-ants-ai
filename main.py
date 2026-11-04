@@ -7,7 +7,7 @@ def enable_high_dpi():
     """Enable Per-Monitor v2 DPI awareness on Windows to prevent GUI blurriness."""
     if sys.platform.startswith('win'):
         try:
-            # Per-Monitor v2 DPI awareness
+            # High DPI awareness
             ctypes.windll.shcore.SetProcessDpiAwareness(2)
         except Exception:
             try:

@@ -6,13 +6,14 @@ from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional
 
 from ui_theme import THEME, FONT_NAME, ButtonPrimary, ButtonSecondary, ButtonDanger, ThemedModal
-from puzzle_logic import run_simulation_benchmark
+from puzzle_logic import (run_simulation_benchmark, generate_benchmark_corpus,
+                          BENCHMARK_AGENTS, BENCHMARK_PLAYERS)
 
 
 class BenchmarkView(tk.Frame):
     """
     Simulation & Benchmark Lab View.
-    Implements the comparative evaluation framework described in Chapter 2.2 and Table 3.
+    Implements the comparative evaluation framework.
     """
     def __init__(self, parent, app):
         super().__init__(parent, bg=THEME['bg'])
@@ -40,7 +41,7 @@ class BenchmarkView(tk.Frame):
 
         tk.Label(
             header,
-            text="Simulated Match Benchmark Framework (Russell & Norvig, Table 3 Comparative Analysis)",
+            text="Simulated Match Benchmark Framework",
             font=(FONT_NAME, 10),
             bg=THEME['bg'],
             fg=THEME['text_muted']
@@ -62,20 +63,20 @@ class BenchmarkView(tk.Frame):
         lbl_fnt = (FONT_NAME, 9, "bold")
         ent_fnt = (FONT_NAME, 9)
 
-        # Row 1: Agent & Scripted Player
+        # Primary Controls: Agent and Scripted Player
         row1 = tk.Frame(ctrl_card, bg=THEME['surface'])
         row1.pack(fill=tk.X, pady=4)
 
         tk.Label(row1, text="Defender Model:", font=lbl_fnt, bg=THEME['surface'], fg=THEME['text']).pack(side=tk.LEFT, padx=(0, 6))
-        self.var_agent = tk.StringVar(value="Proposed: Optimized Agent (Alpha-Beta d=6)")
+        self.var_agent = tk.StringVar(value="Optimized Agent (Alpha-Beta d=6)")
         cb_agent = ttk.Combobox(
             row1,
             textvariable=self.var_agent,
             values=[
-                "Proposed: Optimized Agent (Alpha-Beta d=6)",
-                "Proposed: Optimized Agent (Alpha-Beta d=3)",
+                "Optimized Agent (Alpha-Beta d=6)",
+                "Optimized Agent (Alpha-Beta d=3)",
                 "Baseline 2: Vanilla Minimax (d=3, Static, No Pruning)",
-                "Baseline 1: Random Move Agent"
+                "Random Move Agent"
             ],
             state="readonly",
             width=38,
@@ -99,16 +100,16 @@ class BenchmarkView(tk.Frame):
         )
         cb_scripted.pack(side=tk.LEFT)
 
-        # Row 2: Games Count & Board Size & Actions
+        # Match Parameters and Actions
         row2 = tk.Frame(ctrl_card, bg=THEME['surface'])
         row2.pack(fill=tk.X, pady=(8, 4))
 
         tk.Label(row2, text="Simulated Games (G):", font=lbl_fnt, bg=THEME['surface'], fg=THEME['text']).pack(side=tk.LEFT, padx=(0, 6))
-        self.var_games = tk.StringVar(value="25 Games")
+        self.var_games = tk.StringVar(value="1000 Games")
         cb_games = ttk.Combobox(
             row2,
             textvariable=self.var_games,
-            values=["10 Games", "25 Games", "50 Games", "100 Games"],
+            values=["1 Game", "10 Games", "25 Games", "100 Games", "1000 Games"],
             state="readonly",
             width=12,
             font=ent_fnt
@@ -116,11 +117,11 @@ class BenchmarkView(tk.Frame):
         cb_games.pack(side=tk.LEFT, padx=(0, 18))
 
         tk.Label(row2, text="Board Size:", font=lbl_fnt, bg=THEME['surface'], fg=THEME['text']).pack(side=tk.LEFT, padx=(0, 6))
-        self.var_size = tk.StringVar(value="9x9 Board")
+        self.var_size = tk.StringVar(value="11x11 Board")
         cb_size = ttk.Combobox(
             row2,
             textvariable=self.var_size,
-            values=["9x9 Board", "6x6 Board"],
+            values=["11x11 Board", "12x12 Board"],
             state="readonly",
             width=12,
             font=ent_fnt
@@ -149,7 +150,7 @@ class BenchmarkView(tk.Frame):
         )
         self.lbl_status.pack(anchor="w", pady=(2, 0))
 
-        # Results Table Card
+        # Results Container
         table_card = tk.Frame(
             container,
             bg=THEME['surface'],
@@ -170,7 +171,7 @@ class BenchmarkView(tk.Frame):
             fg=THEME['text']
         ).pack(anchor="w", pady=(0, 6))
 
-        columns = ("model", "opponent", "games", "latency", "pruning", "delay", "r_neut")
+        columns = ("model", "opponent", "games", "latency", "pruning", "delay", "r_neut", "max_latency", "depth", "timeouts")
         self.tree = ttk.Treeview(table_card, columns=columns, show='headings', height=10)
 
         self.tree.heading("model", text="Defender Model")
@@ -180,6 +181,9 @@ class BenchmarkView(tk.Frame):
         self.tree.heading("pruning", text="Pruning Efficiency (prune)")
         self.tree.heading("delay", text="Delay Margin (moves)")
         self.tree.heading("r_neut", text="Neutralization Rate (Rneut)")
+        self.tree.heading("max_latency", text="Max latency (s)")
+        self.tree.heading("depth", text="Avg depth / requested (% complete)")
+        self.tree.heading("timeouts", text="Timeouts")
 
         self.tree.column("model", width=220, anchor="w")
         self.tree.column("opponent", width=160, anchor="w")
@@ -188,10 +192,16 @@ class BenchmarkView(tk.Frame):
         self.tree.column("pruning", width=140, anchor="center")
         self.tree.column("delay", width=110, anchor="center")
         self.tree.column("r_neut", width=140, anchor="center")
+        self.tree.column("max_latency", width=120, anchor="center")
+        self.tree.column("depth", width=220, anchor="center")
+        self.tree.column("timeouts", width=80, anchor="center")
 
         tree_scroll = ttk.Scrollbar(table_card, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=tree_scroll.set)
         tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        horizontal = ttk.Scrollbar(table_card, orient=tk.HORIZONTAL, command=self.tree.xview)
+        self.tree.configure(xscrollcommand=horizontal.set)
+        horizontal.pack(side=tk.BOTTOM, fill=tk.X)
         self.tree.pack(fill=tk.BOTH, expand=True)
 
         # Footer Actions
@@ -225,10 +235,10 @@ class BenchmarkView(tk.Frame):
         try:
             return int(val.split()[0])
         except Exception:
-            return 25
+            return 1000
 
     def _parse_board_size(self) -> int:
-        return 6 if "6x6" in self.var_size.get() else 9
+        return int(self.var_size.get().split('x')[0])
 
     def _start_single_benchmark(self):
         if self.is_running:
@@ -249,16 +259,15 @@ class BenchmarkView(tk.Frame):
             def prog_cb(cur, tot):
                 self.after(0, lambda: self._update_progress(cur, tot))
 
-            res = run_simulation_benchmark(
-                agent_model=agent_model,
-                scripted_player_type=scripted_key,
-                num_games=num_games,
-                depth=depth,
-                board_size=board_size,
-                progress_callback=prog_cb
-            )
-
-            self.after(0, lambda: self._on_benchmark_complete([res]))
+            try:
+                res = run_simulation_benchmark(
+                    agent_model=agent_model, scripted_player_type=scripted_key,
+                    num_games=num_games, depth=depth, board_size=board_size,
+                    progress_callback=prog_cb)
+            except Exception as error:
+                self.after(0, lambda message=str(error): self._on_benchmark_failed(message))
+            else:
+                self.after(0, lambda: self._on_benchmark_complete([res]))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -266,20 +275,11 @@ class BenchmarkView(tk.Frame):
         if self.is_running:
             return
 
-        combos = [
-            ('proposed_d6', 6, "Proposed: Optimized Agent (d=6)", 'shortest_path'),
-            ('proposed_d6', 6, "Proposed: Optimized Agent (d=6)", 'sub_optimal'),
-            ('proposed_d6', 6, "Proposed: Optimized Agent (d=6)", 'random'),
-            ('baseline_2_vanilla', 3, "Baseline 2: Vanilla Minimax (d=3)", 'shortest_path'),
-            ('baseline_2_vanilla', 3, "Baseline 2: Vanilla Minimax (d=3)", 'sub_optimal'),
-            ('baseline_2_vanilla', 3, "Baseline 2: Vanilla Minimax (d=3)", 'random'),
-            ('baseline_1_random', 1, "Baseline 1: Random Move Agent", 'shortest_path'),
-            ('baseline_1_random', 1, "Baseline 1: Random Move Agent", 'sub_optimal'),
-            ('baseline_1_random', 1, "Baseline 1: Random Move Agent", 'random')
-        ]
+        combos = [(model, depth, label, player) for model, depth, label in BENCHMARK_AGENTS
+                  for player in BENCHMARK_PLAYERS]
 
         board_size = self._parse_board_size()
-        games_per_combo = 10  # Fast batch run
+        games_per_combo = self._parse_games_count()
 
         self.is_running = True
         self.btn_run.config(state=tk.DISABLED)
@@ -288,9 +288,10 @@ class BenchmarkView(tk.Frame):
         self.progress_bar['value'] = 0
         self.progress_bar['maximum'] = total_steps
 
-        def worker():
+        def run_batch():
             completed_overall = 0
             batch_results = []
+            corpus = generate_benchmark_corpus(games_per_combo, board_size)
 
             for agent_k, d, display_agent, script_k in combos:
                 def prog_cb(cur, tot):
@@ -307,14 +308,27 @@ class BenchmarkView(tk.Frame):
                     num_games=games_per_combo,
                     depth=d,
                     board_size=board_size,
-                    progress_callback=prog_cb
+                    progress_callback=prog_cb,
+                    corpus=corpus
                 )
                 completed_overall += games_per_combo
                 batch_results.append(res)
 
             self.after(0, lambda: self._on_benchmark_complete(batch_results))
 
+        def worker():
+            try:
+                run_batch()
+            except Exception as error:
+                self.after(0, lambda message=str(error): self._on_benchmark_failed(message))
+
         threading.Thread(target=worker, daemon=True).start()
+
+    def _on_benchmark_failed(self, message):
+        self.is_running = False
+        self.btn_run.config(state=tk.NORMAL)
+        self.btn_run_all.config(state=tk.NORMAL)
+        self.lbl_status.config(text=f"Benchmark failed: {message}")
 
     def _update_progress(self, current: int, total: int):
         self.progress_bar['value'] = current
@@ -350,8 +364,12 @@ class BenchmarkView(tk.Frame):
                     str(res['total_games']),
                     f"{res['avg_latency']:.3f} s",
                     f"{res['avg_pruning_efficiency']:.1f} %",
-                    f"+{res['delay_margin']:.1f} moves",
-                    f"{res['neutralization_rate']:.1f} %"
+                    'N/A (no wins)' if res['delay_margin'] is None else f"{res['delay_margin']:+.1f} moves",
+                    f"{res['neutralization_rate']:.1f} %",
+                    f"{res['max_latency']:.3f}",
+                    f"{res['avg_completed_depth']:.1f} / {res['requested_depth']} ({res['full_depth_rate']:.0f}%)"
+                    if res['requested_depth'] > 1 else 'No search',
+                    str(res['timeout_count'])
                 )
             )
 
@@ -371,22 +389,9 @@ class BenchmarkView(tk.Frame):
         filename = f"benchmark_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         try:
             with open(filename, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow([
-                    "Defender Model", "Scripted Opponent", "Games (G)",
-                    "Turn Latency (s)", "Pruning Efficiency (%)",
-                    "Delay Margin (moves)", "Neutralization Rate (%)"
-                ])
-                for r in self.results_data:
-                    writer.writerow([
-                        r['agent_model'],
-                        r['scripted_player'],
-                        r['total_games'],
-                        f"{r['avg_latency']:.4f}",
-                        f"{r['avg_pruning_efficiency']:.2f}",
-                        f"{r['delay_margin']:.2f}",
-                        f"{r['neutralization_rate']:.2f}"
-                    ])
+                writer = csv.DictWriter(f, fieldnames=list(self.results_data[0]))
+                writer.writeheader()
+                writer.writerows(self.results_data)
 
             modal = ThemedModal(self, "Export Successful", min_width=360)
             tk.Label(

@@ -1,7 +1,10 @@
 import tkinter as tk
 from tkinter import ttk
 import math
+from functools import lru_cache
+from pathlib import Path
 from typing import Callable, List, Optional, Any, Tuple
+from PIL import Image, ImageTk
 
 # Restrained system typography adhering to Apple Design guidelines
 FONT_NAME = "Segoe UI"
@@ -45,8 +48,7 @@ COLOR_PALETTES = {
 HOTKEYS = {
     'undo': {'seq': '<Control-z>', 'key_str': 'Ctrl+Z', 'label': 'Undo'},
     'restart': {'seq': '<Control-r>', 'key_str': 'Ctrl+R', 'label': 'Restart'},
-    'surrender': {'seq': '<Control-e>', 'key_str': 'Ctrl+E', 'label': 'Surrender'},
-    'save': {'seq': '<Control-s>', 'key_str': 'Ctrl+S', 'label': 'Save Slot'}
+    'surrender': {'seq': '<Control-e>', 'key_str': 'Ctrl+E', 'label': 'Surrender'}
 }
 
 
@@ -130,6 +132,26 @@ def draw_star(canvas: tk.Canvas, cx: float, cy: float, radius: float, fill: str,
     canvas.create_polygon(points, fill=fill, outline=outline, width=1)
 
 
+@lru_cache(maxsize=3)
+def _piece_art(piece_type: str) -> Image.Image:
+    filename = {'H': 'orang.png', 'E': 'gajah.png', 'A': 'semut.png'}[piece_type]
+    with Image.open(Path(__file__).resolve().parent / 'assets' / filename) as source:
+        image = source.convert('RGBA')
+    return image.crop(image.getchannel('A').getbbox())
+
+
+def draw_piece_image(canvas: tk.Canvas, cx: int, cy: int, piece_type: str, size: int) -> None:
+    """Keep Tk image references on the canvas, caching only its current piece size."""
+    if getattr(canvas, '_piece_image_size', None) != size:
+        canvas._piece_image_size = size
+        canvas._piece_images = {}
+    if piece_type not in canvas._piece_images:
+        image = _piece_art(piece_type).copy()
+        image.thumbnail((size, size), Image.Resampling.LANCZOS)
+        canvas._piece_images[piece_type] = ImageTk.PhotoImage(image, master=canvas)
+    canvas.create_image(cx, cy, image=canvas._piece_images[piece_type])
+
+
 def draw_board_thumbnail(canvas: tk.Canvas, board_size: int, pieces: List[Tuple[int, int, int, str]],
                          target_coord: Tuple[int, int], width: int = 140, height: int = 140,
                          p1_color: str = '#30D158', p2_color: str = '#FF453A') -> None:
@@ -179,10 +201,9 @@ def draw_board_thumbnail(canvas: tk.Canvas, board_size: int, pieces: List[Tuple[
             color = p1_color if owner == 0 else p2_color
 
             canvas.create_oval(x0 + pad, y0 + pad, x1 - pad, y1 - pad, fill=color, outline='#FFFFFF', width=1)
-            if cell_size >= 16:
-                cx = (x0 + x1) // 2
-                cy = (y0 + y1) // 2
-                canvas.create_text(cx, cy, text=pt, font=(FONT_NAME, max(7, cell_size // 3), "bold"), fill='#FFFFFF')
+            cx = (x0 + x1) // 2
+            cy = (y0 + y1) // 2
+            draw_piece_image(canvas, cx, cy, pt, max(1, cell_size - 2 * pad - 2))
 
 
 def bind_mousewheel(widget: tk.Widget, scroll_target: tk.Widget) -> None:

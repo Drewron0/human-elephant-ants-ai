@@ -162,42 +162,6 @@ def clear_stage_leaderboard(stage_id: Optional[str] = None) -> None:
     _save_json(DB_FILE, db)
 
 
-# PvP Stats Management
-
-def update_pvp_stats(username: str, won: bool, undos: int = 0) -> None:
-    db = _load_json(DB_FILE, {"pve": [], "pvp": {}, "stages": {}})
-    username = username.strip() or "Player"
-    stats = db.setdefault("pvp", {}).get(username, {"wins": 0, "losses": 0, "undos": 0, "last_played": ""})
-    if won:
-        stats["wins"] += 1
-    else:
-        stats["losses"] += 1
-    stats["undos"] = stats.get("undos", 0) + undos
-    stats["last_played"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-    db["pvp"][username] = stats
-    _save_json(DB_FILE, db)
-
-
-def get_pvp_stats() -> Dict[str, Dict[str, Any]]:
-    db = _load_json(DB_FILE, {"pve": [], "pvp": {}, "stages": {}})
-    return db.get("pvp", {})
-
-
-def delete_pvp_player(username: str) -> bool:
-    db = _load_json(DB_FILE, {"pve": [], "pvp": {}, "stages": {}})
-    if username in db.get("pvp", {}):
-        del db["pvp"][username]
-        _save_json(DB_FILE, db)
-        return True
-    return False
-
-
-def clear_pvp_stats() -> None:
-    db = _load_json(DB_FILE, {"pve": [], "pvp": {}, "stages": {}})
-    db["pvp"] = {}
-    _save_json(DB_FILE, db)
-
-
 # Mid-game PvE Save Slots
 
 def save_game_slot(slot_id: str, slot_name: str, payload: Dict[str, Any]) -> None:

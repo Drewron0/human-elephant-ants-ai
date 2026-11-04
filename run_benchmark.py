@@ -1,68 +1,51 @@
-"""
-Chess-Sut: Minimax with Alpha-Beta Pruning Evaluation Framework
-Standalone Benchmark Runner (Russell & Norvig, Table 3 Comparative Analysis)
+"""Reproducible proposal benchmark: 1,000 games for each of 12 combinations."""
+import argparse
+import csv
+import json
+from pathlib import Path
 
-Team: Felix Richardo, Vallerian Davyne Djunarko, Aaron Hans Adiputra
-Universitas Ciputra Surabaya 2026
-"""
-
-import sys
-import time
-from puzzle_logic import run_simulation_benchmark
+from puzzle_logic import (BENCHMARK_AGENTS, BENCHMARK_PLAYERS,
+                          generate_benchmark_corpus, run_simulation_benchmark)
 
 
-def main():
-    print("=" * 80)
-    print("CHESS-SUT AI AGENT EVALUATION BENCHMARK")
-    print("Comparing Proposed Optimized Agent against Baselines (Proposal Table 3)")
-    print("=" * 80)
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--games', type=int, default=1000, help='Games per combination (default: 1000)')
+    parser.add_argument('--board-size', type=int, default=11, help='At least 11 for certified 10-step races')
+    parser.add_argument('--seed', type=int, default=2026)
+    parser.add_argument('--output-dir', type=Path, default=Path('benchmark_results'))
+    return parser.parse_args(argv)
 
-    configurations = [
-        # Model, Depth, Display Label, Opponents
-        ('proposed_d6', 6, "Proposed: Optimized (Alpha-Beta d=6)"),
-        ('proposed_d3', 3, "Proposed: Optimized (Alpha-Beta d=3)"),
-        ('baseline_2_vanilla', 3, "Baseline 2: Vanilla Minimax (d=3, static)"),
-        ('baseline_1_random', 1, "Baseline 1: Random Move Agent")
-    ]
 
-    opponents = [
-        ('shortest_path', 'Shortest-Path Player'),
-        ('sub_optimal', 'Sub-Optimal Player (25% deviations)'),
-        ('random', 'Random Move Player')
-    ]
-
-    games_per_run = 10
-    board_size = 6  # Fast benchmark on 6x6 or 9x9
-
-    print(f"\nConfiguration: {games_per_run} games per combination on {board_size}x{board_size} puzzle board.\n")
-
+def main(argv=None):
+    args = parse_args(argv)
+    corpus = generate_benchmark_corpus(args.games, args.board_size, args.seed)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    (args.output_dir / 'corpus.json').write_text(
+        json.dumps([s.to_dict() for s in corpus], indent=2), encoding='utf-8')
     results = []
+    with (args.output_dir / 'turns.jsonl').open('w', encoding='utf-8') as turns:
+        def log_turn(record):
+            turns.write(json.dumps(record, allow_nan=False) + '\n')
 
-    for agent_k, depth, agent_label in configurations:
-        for script_k, opp_label in opponents:
-            print(f"Running: [{agent_label}] vs [{opp_label}] ... ", end="", flush=True)
-            t_start = time.time()
-            res = run_simulation_benchmark(
-                agent_model=agent_k,
-                scripted_player_type=script_k,
-                num_games=games_per_run,
-                depth=depth,
-                board_size=board_size
-            )
-            elapsed = time.time() - t_start
-            print(f"Done ({elapsed:.2f}s)")
-            results.append((agent_label, opp_label, res))
-
-    print("\n" + "=" * 96)
-    print(f"{'Defender Model':<32} | {'Scripted Opponent':<24} | {'Tturn (s)':<10} | {'Prune %':<9} | {'dS (moves)':<10} | {'Rneut %':<8}")
-    print("-" * 96)
-
-    for agent_label, opp_label, r in results:
-        print(f"{agent_label:<32} | {opp_label:<24} | {r['avg_latency']:<10.4f} | {r['avg_pruning_efficiency']:<9.1f} | {r['delay_margin']:<10.2f} | {r['neutralization_rate']:<8.1f}")
-
-    print("=" * 96)
-    print("\nBenchmark successfully finished!")
+        for model, depth, label in BENCHMARK_AGENTS:
+            for player in BENCHMARK_PLAYERS:
+                print(f'{label} vs {player}: {args.games} games...', flush=True)
+                result = run_simulation_benchmark(
+                    model, player, args.games, depth, args.board_size,
+                    corpus=corpus, seed=args.seed, turn_callback=log_turn)
+                results.append(result)
+                # Save completed combinations even if a later run is interrupted.
+                with (args.output_dir / 'results.csv').open('w', newline='', encoding='utf-8') as output:
+                    writer = csv.DictWriter(output, fieldnames=list(result))
+                    writer.writeheader()
+                    writer.writerows(results)
+                print(f"  Max latency: {result['max_latency']:.3f}s; "
+                      f"full-depth turns: {result['full_depth_rate']:.1f}%; "
+                      f"neutralized: {result['neutralization_rate']:.1f}%", flush=True)
+    print(f'Saved {len(results)} combinations, corpus and per-turn telemetry to {args.output_dir}')
+    return results
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -2,15 +2,25 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Dict, Any, Optional, Tuple, List
 import time
+import threading
+from queue import Queue, Empty
 
 from ui_theme import (
     THEME, FONT_NAME, HOTKEYS, ButtonPrimary, ButtonSecondary, ButtonDanger,
-    ThemedModal, draw_star, bind_mousewheel
+    ThemedModal, draw_star, bind_mousewheel, draw_piece_image
 )
 from game_logic import GameState, Piece
-from puzzle_logic import PuzzleScenario, PuzzleSession, PRECONFIGURED_PUZZLES, generate_winnable_puzzle
-from ai_engine import get_defender_move, DEFAULT_PROPOSAL_WEIGHTS
+from puzzle_logic import PuzzleSession, get_all_puzzles, make_puzzle_move
+from ai_engine import get_defender_move, get_exact_defender_reply, DEFAULT_EVALUATION_WEIGHTS
 import storage
+
+
+def _analyze_defender(results, state, remaining_steps, policy, cancel_event):
+    try:
+        result = get_exact_defender_reply(state, remaining_steps, policy, cancel_event=cancel_event)
+    except Exception as exc:
+        result = {'status': 'ERROR', 'reason': str(exc)}
+    results.put(result)
 
 
 class PuzzleGameView(tk.Frame):
@@ -22,20 +32,16 @@ class PuzzleGameView(tk.Frame):
     def __init__(self, parent, app, config: Dict[str, Any]):
         super().__init__(parent, bg=THEME['bg'])
         self.app = app
-        self.config = config
+        self.config = dict(config)
 
         # Initialize Scenario & Session
-        scenario_key = config.get('puzzle_scenario', 'stage_6x6_01')
-        custom_obj = config.get('custom_scenario_obj')
+        self.scenario = config.get('custom_scenario_obj')
+        if self.scenario is None:
+            self.scenario = get_all_puzzles().get(config.get('puzzle_scenario'))
+        if self.scenario is None:
+            raise ValueError('Select an existing custom stage before playing')
 
-        if custom_obj:
-            self.scenario = custom_obj
-        elif scenario_key in PRECONFIGURED_PUZZLES:
-            self.scenario = PRECONFIGURED_PUZZLES[scenario_key]
-        else:
-            self.scenario = generate_winnable_puzzle(board_size=config.get('board_size', 6))
-
-        self.show_metrics = config.get('show_metrics', False)
+        self.show_metrics = self.config.get('show_metrics', False)
         self.session = PuzzleSession(self.scenario, show_metrics=self.show_metrics)
         self.state = self.scenario.create_initial_state()
 
@@ -44,6 +50,9 @@ class PuzzleGameView(tk.Frame):
         self.last_move: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
         self.is_game_active = True
         self.ai_timer_id: Optional[str] = None
+        self._defender_queue = None
+        self._defender_poll_id = None
+        self._defender_cancel = None
         self.start_time = time.time()
         self._resize_job = None
 
@@ -71,13 +80,14 @@ class PuzzleGameView(tk.Frame):
 
         tk.Label(
             title_box,
-            text=f"- Optimal Steps: {self.session.s_optimal} | Move Limit: {self.session.s_max}",
+            text=f"{self.scenario.step_summary} | Move Limit: {self.session.s_max}",
             font=(FONT_NAME, 9),
             bg=THEME['surface'],
             fg=THEME['text_muted']
         ).pack(side=tk.LEFT, padx=(8, 0))
 
-        ButtonSecondary(top_bar, text="Back to Stages", command=self._on_back_to_select).pack(side=tk.RIGHT, padx=12, pady=6)
+        ButtonSecondary(top_bar, text="Back to Stages",
+                        command=self._on_back_to_select).pack(side=tk.RIGHT, padx=12, pady=6)
         ButtonSecondary(top_bar, text="Rules", command=self._show_rules_modal).pack(side=tk.RIGHT, padx=(0, 6), pady=6)
 
         # Resizable PanedWindow: Board (Left) & Controls (Right)
@@ -132,7 +142,10 @@ class PuzzleGameView(tk.Frame):
         players_card.pack(fill=tk.X, pady=(0, 8))
 
         p_name = self.config.get('p1_name', 'Player 1')
-        ai_name = self.config.get('agent_model_name', 'Proposed: Optimized Agent (d=6)')
+        ai_name = self.config.get('agent_model_name', 'Optimized Agent (d=6)')
+        model = self.config.get('agent_model', 'exact_defender')
+        if model == 'exact_defender' or model.startswith('proposed'):
+            ai_name = 'Exact Defender (best defense)'
 
         row_p = tk.Frame(players_card, bg=THEME['surface_card'])
         row_p.pack(fill=tk.X)
@@ -152,10 +165,10 @@ class PuzzleGameView(tk.Frame):
 
         s_row = tk.Frame(strat_card, bg=THEME['surface_light'])
         s_row.pack(fill=tk.X)
-        self.lbl_steps = tk.Label(s_row, text=f"Steps: 0 / {self.session.s_optimal}", font=(FONT_NAME, 10, "bold"), bg=THEME['surface_light'], fg=THEME['text'])
+        self.lbl_steps = tk.Label(s_row, text="Steps: 0", font=(FONT_NAME, 10, "bold"), bg=THEME['surface_light'], fg=THEME['text'])
         self.lbl_steps.pack(side=tk.LEFT)
 
-        self.lbl_delay = tk.Label(s_row, text="Delay: 0 moves", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_light'], fg=THEME['success'])
+        self.lbl_delay = tk.Label(s_row, text="Extra: 0 moves", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_light'], fg=THEME['success'])
         self.lbl_delay.pack(side=tk.RIGHT)
 
         st_row = tk.Frame(strat_card, bg=THEME['surface_light'])
@@ -212,7 +225,11 @@ class PuzzleGameView(tk.Frame):
 
         ButtonSecondary(btn_frame, text=f"Reset ({HOTKEYS['restart']['key_str']})", command=self._on_reset_attempt).grid(row=0, column=1, sticky="ew", padx=2, pady=2)
         ButtonDanger(btn_frame, text="Concede", command=self._on_concede).grid(row=1, column=0, sticky="ew", padx=2, pady=2)
-        ButtonSecondary(btn_frame, text="Stages List", command=self._on_back_to_select).grid(row=1, column=1, sticky="ew", padx=2, pady=2)
+        ButtonSecondary(btn_frame, text="Stages List",
+                        command=self._on_back_to_select).grid(row=1, column=1, sticky="ew", padx=2, pady=2)
+        self.btn_ai_retry = ButtonSecondary(btn_frame, text="Retry best defense", command=self._trigger_ai_move)
+        self.btn_ai_retry.grid(row=2, column=0, columnspan=2, sticky="ew", padx=2, pady=2)
+        self.btn_ai_retry.grid_remove()
 
         btn_frame.columnconfigure(0, weight=1)
         btn_frame.columnconfigure(1, weight=1)
@@ -333,11 +350,10 @@ class PuzzleGameView(tk.Frame):
         self.canvas.create_oval(x0 + pad, y0 + pad, x1 - pad, y1 - pad, fill=color, outline='#FFFFFF', width=2)
         cx = (x0 + x1) // 2
         cy = (y0 + y1) // 2
-        font_sz = max(8, sq_size // 4)
-        self.canvas.create_text(cx, cy, text=piece.p_type, font=(FONT_NAME, font_sz, "bold"), fill='#FFFFFF')
+        draw_piece_image(self.canvas, cx, cy, piece.p_type, max(1, sq_size - 2 * pad - 4))
 
     def _on_board_click(self, event):
-        if not self.is_game_active or self.state.winner is not None or self.state.current_turn != 0:
+        if not self.is_game_active or self.session.is_neutralized or self.state.winner is not None or self.state.current_turn != 0:
             return
 
         size = self.state.board_size
@@ -368,7 +384,9 @@ class PuzzleGameView(tk.Frame):
                 self._draw_board()
 
     def _execute_player_move(self, start: Tuple[int, int], end: Tuple[int, int]):
-        move = self.state.make_move(start, end)
+        if not self.is_game_active or self.session.is_neutralized:
+            return
+        move = make_puzzle_move(self.state, start, end)
         if not move:
             return
 
@@ -385,16 +403,36 @@ class PuzzleGameView(tk.Frame):
             self._handle_puzzle_finish(solved=True)
             return
         elif status == 'NEUTRALIZED':
-            self._handle_puzzle_finish(solved=False, reason=self.session.neutralization_reason)
+            # Keep the failed position and its history available for counted undo.
             return
 
         if self.state.current_turn == 1 and self.is_game_active:
-            self.after(40, self._trigger_ai_move)
+            self.ai_timer_id = self.after(40, self._trigger_ai_move)
 
     def _trigger_ai_move(self):
-        agent_model = self.config.get('agent_model', 'proposed_d6')
+        self.ai_timer_id = None
+        if not self.is_game_active or self.session.is_neutralized or self.state.current_turn != 1:
+            return
+        agent_model = self.config.get('agent_model', 'exact_defender')
+        if agent_model == 'exact_defender' or agent_model.startswith('proposed'):
+            self._cancel_defender_analysis()
+            self.btn_ai_retry.grid_remove()
+            self.lbl_status.config(text="AI: PROVING BEST REPLY", fg=THEME['accent'])
+            self._defender_queue = Queue()
+            self._defender_cancel = threading.Event()
+            try:
+                threading.Thread(target=_analyze_defender,
+                                 args=(self._defender_queue, self.state.clone(),
+                                       self.session.s_max - self.session.current_attempt_steps,
+                                       dict(self.scenario.defender_policy), self._defender_cancel),
+                                 daemon=True).start()
+            except RuntimeError:
+                self._show_unverified_defense()
+                return
+            self._defender_poll_id = self.after(50, self._poll_defender_reply)
+            return
         depth = self.config.get('search_depth', 6)
-        weights = self.config.get('weights', DEFAULT_PROPOSAL_WEIGHTS)
+        weights = self.config.get('weights', DEFAULT_EVALUATION_WEIGHTS)
 
         best_move, eval_score, telemetry = get_defender_move(
             state=self.state,
@@ -402,9 +440,58 @@ class PuzzleGameView(tk.Frame):
             depth=depth,
             weights=weights
         )
+        self._apply_defender_move(best_move, eval_score, telemetry)
+
+    def _cancel_defender_analysis(self):
+        cancel = getattr(self, '_defender_cancel', None)
+        if cancel is not None:
+            cancel.set()
+        poll_id = getattr(self, '_defender_poll_id', None)
+        if poll_id is not None:
+            self.after_cancel(poll_id)
+        self._defender_cancel = None
+        self._defender_poll_id = None
+        self._defender_queue = None
+
+    def _show_unverified_defense(self):
+        self.lbl_status.config(text="AI ANALYSIS INCOMPLETE", fg=THEME['warning'])
+        self.lbl_delay.config(text="No guessed reply", fg=THEME['warning'])
+        self.btn_ai_retry.grid()
+
+    def _poll_defender_reply(self):
+        self._defender_poll_id = None
+        if not self.is_game_active or self._defender_queue is None:
+            return
+        try:
+            result = self._defender_queue.get_nowait()
+        except Empty:
+            self._defender_poll_id = self.after(50, self._poll_defender_reply)
+            return
+        self._defender_queue = None
+        self._defender_cancel = None
+        if result['status'] == 'PROVEN':
+            policy = self.scenario.defender_policy
+            for key, entry in result['defender_policy'].items():
+                old = policy.get(key)
+                if (old is None or (old['steps'] is None and entry['steps'] is not None)
+                        or (old['steps'] is None and entry['steps'] is None
+                            and entry['remaining'] > old['remaining'])):
+                    policy[key] = entry
+            self._apply_defender_move(result['move'], result['eval_score'], result['telemetry'],
+                                      result['proof_horizon'])
+        elif result['status'] == 'NO_MOVES':
+            self._apply_defender_move(None, result['eval_score'], result['telemetry'])
+        elif result['status'] == 'TERMINAL':
+            self._update_ui_state()
+        else:
+            self._show_unverified_defense()
+
+    def _apply_defender_move(self, best_move, eval_score, telemetry, proof_horizon=None):
 
         if not best_move:
-            self._handle_puzzle_finish(solved=True)
+            self.state.current_turn = 0
+            self.state.winner = None
+            self._update_ui_state()
             return
 
         s, e = best_move
@@ -415,21 +502,22 @@ class PuzzleGameView(tk.Frame):
             t_turn=telemetry.t_turn,
             nodes_gen=telemetry.nodes_generated,
             nodes_eval=telemetry.nodes_evaluated,
-            prune_efficiency=telemetry.pruning_efficiency
+            prune_efficiency=telemetry.pruning_efficiency,
+            completed_depth=telemetry.completed_depth, timed_out=telemetry.timed_out,
+            proof_horizon=proof_horizon
         )
 
         def do_move():
-            if not self.is_game_active:
+            self.ai_timer_id = None
+            if not self.is_game_active or self.session.is_neutralized:
                 return
-            self.state.make_move(s, e)
+            make_puzzle_move(self.state, s, e)
             self.last_move = (s, e)
             self._update_ui_state()
 
             status = self.session.evaluate_status(self.state)
             if status == 'SOLVED':
                 self._handle_puzzle_finish(solved=True)
-            elif status == 'NEUTRALIZED':
-                self._handle_puzzle_finish(solved=False, reason=self.session.neutralization_reason)
 
         self.ai_timer_id = self.after(300, do_move)
 
@@ -439,13 +527,15 @@ class PuzzleGameView(tk.Frame):
         cur = self.session.current_attempt_steps
         s_opt = self.session.s_optimal
         s_max = self.session.s_max
-        self.lbl_steps.config(text=f"Steps: {cur} / {s_opt} (Max: {s_max})")
+        self.lbl_steps.config(text=f"Steps: {cur} / {s_opt if s_opt is not None else '--'} (Max: {s_max})")
 
         delta = self.session.delay_margin
-        if delta == 0:
-            self.lbl_delay.config(text="Delay: 0 moves (Optimal)", fg=THEME['success'])
+        if s_opt is None:
+            self.lbl_delay.config(text="Extra: N/A", fg=THEME['text_muted'])
+        elif delta == 0:
+            self.lbl_delay.config(text="Extra: 0 moves", fg=THEME['success'])
         else:
-            self.lbl_delay.config(text=f"Delay: +{delta} moves", fg=THEME['warning'])
+            self.lbl_delay.config(text=f"Extra: +{delta} moves", fg=THEME['warning'])
 
         self.lbl_sub_stats.config(
             text=f"Resets: {self.session.resets_count} | Undos: {self.session.undo_count}"
@@ -455,7 +545,7 @@ class PuzzleGameView(tk.Frame):
         if status == 'SOLVED':
             self.lbl_status.config(text="SOLVED", fg=THEME['success'])
         elif status == 'NEUTRALIZED':
-            self.lbl_status.config(text="NEUTRALIZED", fg=THEME['danger'])
+            self.lbl_status.config(text="LOST - Undo or Reset", fg=THEME['danger'])
         elif status == 'DELAYED':
             self.lbl_status.config(text=f"DELAYED (+{delta})", fg=THEME['warning'])
         else:
@@ -477,9 +567,14 @@ class PuzzleGameView(tk.Frame):
 
             t = last['t_turn']
             prune = last['prune_efficiency']
-            self.lbl_ai_metrics.config(
-                text=f"Latency: {t:.3f}s (<=2.0s) | Prune: {prune:.1f}%"
-            )
+            horizon = last.get('proof_horizon')
+            if horizon is not None:
+                self.lbl_ai_metrics.config(text=f"Latency: {t:.3f}s | Proven reply | Horizon: {horizon} player moves")
+            else:
+                self.lbl_ai_metrics.config(
+                    text=f"Latency: {t:.3f}s | Prune: {prune:.1f}% | Depth: {last['completed_depth']}"
+                         + (" (time limit)" if last['timed_out'] else "")
+                )
 
         # Move History
         self.list_notation.delete(0, tk.END)
@@ -496,16 +591,29 @@ class PuzzleGameView(tk.Frame):
     def _on_undo(self):
         if not self.config.get('undo_enabled', True) or not self.is_game_active:
             return
+        self._cancel_defender_analysis()
+        if hasattr(self, 'btn_ai_retry'):
+            self.btn_ai_retry.grid_remove()
 
+        if self.ai_timer_id is not None:
+            self.after_cancel(self.ai_timer_id)
+            self.ai_timer_id = None
         if self.state.undo(player_idx=0):
             self.session.record_undo()
-            self.state.undo(player_idx=0)
+            if self.state.current_turn == 1:
+                self.state.undo(player_idx=0)
 
         self.selected_sq = None
         self.valid_targets = []
+        self.last_move = None
         self._update_ui_state()
 
     def _on_reset_attempt(self):
+        self._cancel_defender_analysis()
+        self.btn_ai_retry.grid_remove()
+        if self.ai_timer_id is not None:
+            self.after_cancel(self.ai_timer_id)
+            self.ai_timer_id = None
         self.session.reset_attempt()
         self.state = self.scenario.create_initial_state()
         self.selected_sq = None
@@ -518,9 +626,12 @@ class PuzzleGameView(tk.Frame):
     def _on_concede(self):
         if not self.is_game_active:
             return
+        self._cancel_defender_analysis()
         self._handle_puzzle_finish(solved=False, reason="Conceded by Player")
 
     def _handle_puzzle_finish(self, solved: bool, reason: str = ""):
+        if not self.is_game_active:
+            return
         self.is_game_active = False
         time_spent = int(time.time() - self.start_time)
 
@@ -549,8 +660,8 @@ class PuzzleGameView(tk.Frame):
 
             summary = (
                 f"You reached the corner in {self.session.current_attempt_steps} steps "
-                f"(Optimal: {self.session.s_optimal}).\n"
-                f"Forced Delay Margin: +{self.session.delay_margin} moves | Time: {time_spent}s."
+                f"({self.scenario.step_summary}).\n"
+                f"Extra vs minimum: +{self.session.delay_margin} moves | Time: {time_spent}s."
             )
         else:
             tk.Label(
@@ -563,7 +674,7 @@ class PuzzleGameView(tk.Frame):
 
             cause = reason or "Target rendered unreachable"
             summary = (
-                f"The AI optimal defender neutralized your advance.\n"
+                f"The defender stopped your advance.\n"
                 f"Cause: {cause}."
             )
 
@@ -620,7 +731,9 @@ class PuzzleGameView(tk.Frame):
         content = (
             "1. Objective:\n"
             f"   Navigate your piece to the opponent's star corner within Move Limit={self.session.s_max} moves.\n"
-            f"   The optimal path takes {self.session.s_optimal} steps.\n\n"
+            f"   {self.scenario.step_summary}.\n"
+            "   The minimum step count is supplied by the stage author.\n"
+            "   After a loss, Undo or Reset remains available. Each undo action is counted.\n\n"
             "2. Combat Hierarchy:\n"
             "   Elephant (E) defeats Human (H)\n"
             "   Human (H) defeats Ant (A)\n"
@@ -646,6 +759,8 @@ class PuzzleGameView(tk.Frame):
         self.app.show_view('puzzle_select')
 
     def _cleanup(self):
+        self.is_game_active = False
+        self._cancel_defender_analysis()
         if self._resize_job is not None:
             try:
                 self.after_cancel(self._resize_job)

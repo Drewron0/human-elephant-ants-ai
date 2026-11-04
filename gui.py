@@ -1,5 +1,4 @@
 import tkinter as tk
-from queue import Queue
 from typing import Dict, Any, Optional
 from ui_theme import THEME, setup_ttk_styles
 from views.menu_view import MainMenuView
@@ -10,7 +9,6 @@ from views.puzzle_select_view import PuzzleSelectView
 from views.stage_editor_view import StageEditorView
 from views.benchmark_view import BenchmarkView
 from views.leaderboard_view import LeaderboardView
-from views.saves_view import SavedGamesView
 from views.tutorial_view import TutorialView
 
 
@@ -32,17 +30,13 @@ class GameApp(tk.Tk):
         self.minsize(1050, 720)
         self.configure(bg=THEME['bg'])
 
-        # Initialize dark theme styling for ttk widgets
         setup_ttk_styles(self)
 
         self.container = tk.Frame(self, bg=THEME['bg'])
         self.container.pack(fill=tk.BOTH, expand=True)
 
         self.current_view: Optional[tk.Frame] = None
-        self.random_challenge_queue = Queue()
-        self.random_challenge_loading = False
-        self.random_challenges = None
-        self.random_challenge_error = None
+        self.protocol('WM_DELETE_WINDOW', self._on_close)
         self.show_view('menu')
 
     def show_view(self, view_name: str, **kwargs):
@@ -76,8 +70,7 @@ class GameApp(tk.Tk):
             self.current_view = BenchmarkView(self.container, self)
         elif view_name == 'leaderboard':
             self.current_view = LeaderboardView(self.container, self)
-        elif view_name == 'saves':
-            self.current_view = SavedGamesView(self.container, self)
+
         elif view_name == 'tutorial':
             self.current_view = TutorialView(self.container, self)
 
@@ -95,3 +88,8 @@ class GameApp(tk.Tk):
 
     def start_puzzle(self, config: Dict[str, Any]):
         self.show_view('puzzle_game', config=config)
+
+    def _on_close(self):
+        if self.current_view and hasattr(self.current_view, '_cleanup'):
+            self.current_view._cleanup()
+        self.destroy()

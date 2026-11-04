@@ -4,18 +4,20 @@ import time
 from typing import Tuple, Optional, List, Dict, Any
 from game_logic import GameState, Piece, BEATS, PREDATORS
 
-PIECE_VALUES = {
-    'E': 14.0,  # Elephant
-    'H': 12.0,  # Human
-    'A': 10.0   # Ant
-}
+# For baseline
+PIECE_VALUES = {"E": 14.0, "H": 12.0, "A": 10.0}
 
-DEFAULT_PROPOSAL_WEIGHTS = {
-    'wm': 1.0,  # Dynamic Material Score weight
-    'wc': 1.5,  # Predator-Prey Proximity Score weight
-    'wp': 0.5,  # Positional and Mobility Score weight
-    'wt': 2.5   # Target Progress Score weight
-}
+DEFAULT_EVALUATION_WEIGHTS = {"wm": 1.0, "wc": 1.5, "wp": 0.5, "wt": 2.5}
+
+DEFAULT_PROPOSAL_WEIGHTS = DEFAULT_EVALUATION_WEIGHTS
+
+
+# chebyshev : jarak paling dekat tanpa memperhitungkan rintangan
+# digunakna saat
+# 1. evaluate_board()
+# 2. order_moves()
+# 3. order_moves_mvv_lva()
+# 4. evaluate_non_transitive()
 
 
 def chebyshev_distance(p1: Tuple[int, int], p2: Tuple[int, int]) -> int:
@@ -23,13 +25,19 @@ def chebyshev_distance(p1: Tuple[int, int], p2: Tuple[int, int]) -> int:
 
 
 # =====================================================================
-# PROPOSAL IMPLEMENTATION: NON-TRANSITIVE HEURISTIC EVALUATION E(s)
+# E(s)
 # E(s) = wm * M(s) + wc * C(s) + wp * P(s) + wt * T(s)
 # =====================================================================
-
-def evaluate_non_transitive(state: GameState, weights: Optional[Dict[str, float]] = None) -> float:
+# menentukan nilai papan secara dinamis (memperhitungkan posisi dan jumlah PIECE lawan)
+# wm = Bobot material: nilai bidak dinamis berdasarkan jumlah mangsa dan predator.
+# wc = Bobot kedekatan mangsa–predator: peluang menangkap dan ancaman ditangkap.
+# wp = Bobot posisi dan mobilitas: penguasaan tengah papan serta kebebasan bergerak.
+# wt = Bobot target: kemajuan bidak menuju pojok tujuan.
+def evaluate_non_transitive(
+    state: GameState, weights: Optional[Dict[str, float]] = None
+) -> float:
     """
-    Evaluates board state s from Player 0's perspective according to the proposal formula:
+    Evaluates board state s from Player 0's perspective:
     E(s) = wm * M(s) + wc * C(s) + wp * P(s) + wt * T(s)
     Uses a highly optimized single-pass board scanner.
     """
@@ -39,10 +47,10 @@ def evaluate_non_transitive(state: GameState, weights: Optional[Dict[str, float]
         return -100000.0
 
     w = weights if weights else DEFAULT_PROPOSAL_WEIGHTS
-    wm = w.get('wm', 1.0)
-    wc = w.get('wc', 1.5)
-    wp = w.get('wp', 0.5)
-    wt = w.get('wt', 2.5)
+    wm = w.get("wm", 1.0)
+    wc = w.get("wc", 1.5)
+    wp = w.get("wp", 0.5)
+    wt = w.get("wt", 2.5)
 
     size = state.board_size
     target_0 = state.target_corners[0]
@@ -51,8 +59,8 @@ def evaluate_non_transitive(state: GameState, weights: Optional[Dict[str, float]
 
     p0_pieces = []
     p1_pieces = []
-    p0_counts = {'H': 0, 'E': 0, 'A': 0}
-    p1_counts = {'H': 0, 'E': 0, 'A': 0}
+    p0_counts = {"H": 0, "E": 0, "A": 0}
+    p1_counts = {"H": 0, "E": 0, "A": 0}
 
     min_d0 = 99
     min_d1 = 99
@@ -78,7 +86,9 @@ def evaluate_non_transitive(state: GameState, weights: Optional[Dict[str, float]
                         nr, nc = r + dr, c + dc
                         if 0 <= nr < size and 0 <= nc < size:
                             dest = board[nr][nc]
-                            if dest is None or (dest.owner != p.owner and BEATS.get(pt) == dest.p_type):
+                            if dest is None or (
+                                dest.owner != p.owner and BEATS.get(pt) == dest.p_type
+                            ):
                                 mob += 1
 
                 if p.owner == 0:
@@ -98,7 +108,7 @@ def evaluate_non_transitive(state: GameState, weights: Optional[Dict[str, float]
                     if d < min_d1:
                         min_d1 = d
 
-    # 1. Dynamic Material Score M(s)
+    # Dynamic Material Score M(s)
     def calc_mat(pieces, opp_dist):
         tot = 0.0
         for r, c, pt in pieces:
@@ -110,7 +120,7 @@ def evaluate_non_transitive(state: GameState, weights: Optional[Dict[str, float]
 
     m_score = calc_mat(p0_pieces, p1_counts) - calc_mat(p1_pieces, p0_counts)
 
-    # 2. Predator-Prey Proximity Score C(s)
+    # Predator-Prey Proximity Score C(s)
     def calc_prox(friendly, hostile):
         score = 0.0
         for fr, fc, fpt in friendly:
@@ -130,10 +140,10 @@ def evaluate_non_transitive(state: GameState, weights: Optional[Dict[str, float]
 
     c_score = calc_prox(p0_pieces, p1_pieces) - calc_prox(p1_pieces, p0_pieces)
 
-    # 3. Positional and Mobility Score P(s)
+    # Positional and Mobility Score P(s)
     p_score = (mobility_est_0 - mobility_est_1) * 0.75 + (center_0 - center_1) * 1.5
 
-    # 4. Target Progress Score T(s)
+    # Target Progress Score T(s)
     prog_0 = (size - min_d0) * 14.0
     if min_d0 <= 1:
         prog_0 += 150.0
@@ -154,16 +164,23 @@ def evaluate_non_transitive(state: GameState, weights: Optional[Dict[str, float]
 # SUIT-ADAPTED MVV-LVA MOVE ORDERING
 # =====================================================================
 
-def order_moves_mvv_lva(moves: List[Tuple[Tuple[int, int], Tuple[int, int]]],
-                        state: GameState, current_player: int) -> List[Tuple[Tuple[int, int], Tuple[int, int]]]:
+
+# untuk MENGURUTKAN langkah yang akan diambil lebih dulu
+# setiap piece dihitung nilainya : berdasarkan
+# nilai = 10 * (jumlah_mangsa + 1) / (jumlah_predator + 1)
+def order_moves_mvv_lva(
+    moves: List[Tuple[Tuple[int, int], Tuple[int, int]]],
+    state: GameState,
+    current_player: int,
+) -> List[Tuple[Tuple[int, int], Tuple[int, int]]]:
     """
     Explores high-priority captures first using a suit-adapted MVV-LVA heuristic
     based on dynamic material values M(s).
     """
     target = state.target_corners[current_player]
 
-    opp_counts = {'H': 0, 'E': 0, 'A': 0}
-    my_counts = {'H': 0, 'E': 0, 'A': 0}
+    opp_counts = {"H": 0, "E": 0, "A": 0}
+    my_counts = {"H": 0, "E": 0, "A": 0}
     for r in range(state.board_size):
         for c in range(state.board_size):
             p = state.board[r][c]
@@ -189,7 +206,9 @@ def order_moves_mvv_lva(moves: List[Tuple[Tuple[int, int], Tuple[int, int]]],
         if victim is not None:
             # MVV - LVA
             victim_val = dynamic_val(victim.p_type, my_counts)
-            attacker_val = dynamic_val(attacker.p_type, opp_counts) if attacker else 10.0
+            attacker_val = (
+                dynamic_val(attacker.p_type, opp_counts) if attacker else 10.0
+            )
             return 1000.0 + (victim_val * 10.0) - attacker_val
 
         # Non-capture progress
@@ -201,38 +220,140 @@ def order_moves_mvv_lva(moves: List[Tuple[Tuple[int, int], Tuple[int, int]]],
 
 
 # =====================================================================
-# PROPOSAL SEARCH TELEMETRY & ALGORITHMIC ARCHITECTURES
+# SEARCH TELEMETRY AND ALGORITHMIC ARCHITECTURES
 # =====================================================================
 
+
+# dipake untuk, dan digunakan di
+# 1. proposed algo (dynamic PIECE_VALUE) minimax_ab_internal()
+# 2. baseline algo minimax (static PIECE_VALUE) minimax_vanilla_internal()
+# 3. get_defender_move()
 class SearchTelemetry:
     def __init__(self):
         self.nodes_generated: int = 0
         self.nodes_evaluated: int = 0
+        self.nodes_pruned: int = 0
         self.t_turn: float = 0.0
+        self.completed_depth: int = 0
+        self.timed_out: bool = False
 
     @property
     def pruning_efficiency(self) -> float:
         """
-        Pruning efficiency: prune = (1 - n_evaluated / n_generated) * 100%
+        Percentage of generated child moves skipped by alpha-beta cutoffs.
+        Unfinished work at a timeout is not counted as pruning.
         """
         if self.nodes_generated <= 0:
             return 0.0
-        return max(0.0, (1.0 - (self.nodes_evaluated / self.nodes_generated)) * 100.0)
+        return 100.0 * self.nodes_pruned / self.nodes_generated
 
 
-# Proposed Method: Minimax with Alpha-Beta Pruning, MVV-LVA, and E(s)
-def _minimax_ab_internal(state: GameState, depth: int, alpha: float, beta: float,
-                         maximizing: bool, weights: Dict[str, float],
-                         telemetry: SearchTelemetry, deadline: Optional[float] = None) -> Tuple[float, Optional[Tuple[Tuple[int, int], Tuple[int, int]]]]:
+class SearchTimeout(Exception):
+    pass
+
+
+def get_exact_defender_reply(state: GameState, remaining_steps: int, policy=None,
+                             time_budget: float = 120.0, node_budget: int = 3000000,
+                             cancel_event=None) -> Dict[str, Any]:
+    """Use a proven reply or solve the finite puzzle exactly; never guess on timeout."""
+    from puzzle_logic import verify_puzzle, puzzle_position_key, make_puzzle_move
+
+    started = time.perf_counter()
+    telemetry = SearchTelemetry()
+    policy = policy or {}
+    pieces = [(r, c, p.owner, p.p_type) for r, row in enumerate(state.board)
+              for c, p in enumerate(row) if p]
+    key = puzzle_position_key(state.board_size, pieces, state.target_corners[0])
+
+    def result(status, move=None, steps=None, updates=None):
+        telemetry.t_turn = time.perf_counter() - started
+        telemetry.completed_depth = (steps if steps is not None else remaining_steps) if status == 'PROVEN' else 0
+        return dict(status=status, move=move, eval_score=(100000.0 - steps) if steps is not None else -100000.0,
+                    telemetry=telemetry, defender_policy=updates or {},
+                    proof_horizon=telemetry.completed_depth)
+
+    if cancel_event is not None and cancel_event.is_set():
+        return result('UNVERIFIED')
+    if state.current_turn != 1 or state.winner is not None or remaining_steps <= 0:
+        return result('TERMINAL')
+    legal = state.get_valid_moves(1)
+    if not legal:
+        return result('NO_MOVES')
+
+    entry = policy.get(key)
+    if isinstance(entry, dict):
+        try:
+            move = tuple(tuple(coord) for coord in entry['move'])
+            steps = entry['steps']
+            usable = (type(steps) is int and steps >= 0) or (
+                steps is None and entry['remaining'] >= remaining_steps)
+            if usable and move in legal:
+                return result('PROVEN', move, steps)
+        except (KeyError, TypeError, ValueError):
+            pass
+
+    telemetry.nodes_generated += len(legal)
+    for index, move in enumerate(legal):
+        if cancel_event is not None and cancel_event.is_set():
+            return result('UNVERIFIED')
+        telemetry.nodes_evaluated += 1
+        child = state.clone()
+        make_puzzle_move(child, *move)
+        if child.winner == 1:
+            telemetry.nodes_pruned += len(legal) - index - 1
+            update = {key: dict(move=move, steps=None, remaining=remaining_steps)}
+            return result('PROVEN', move, updates=update)
+
+    distance = min((max(abs(r - state.target_corners[0][0]), abs(c - state.target_corners[0][1]))
+                    for r, c, owner, _ in pieces if owner == 0), default=math.inf)
+    if distance > remaining_steps:
+        # No player piece can reach the corner before the move limit, regardless of the reply.
+        update = {key: dict(move=legal[0], steps=None, remaining=remaining_steps)}
+        return result('PROVEN', legal[0], updates=update)
+
+    proof = verify_puzzle(state.board_size, pieces, state.target_corners[0],
+                          max_steps=remaining_steps, time_budget=time_budget,
+                          node_budget=node_budget, current_turn=1, cancel_event=cancel_event)
+    telemetry.nodes_generated += proof.get('nodes_generated', 0)
+    telemetry.nodes_evaluated += proof.get('nodes_evaluated', 0)
+    telemetry.nodes_pruned = proof.get('nodes_pruned', 0)
+    if proof['status'] == 'UNVERIFIED':
+        telemetry.timed_out = True
+        return result('UNVERIFIED')
+    entry = proof['defender_policy'].get(key)
+    if entry is None:
+        return result('UNVERIFIED')
+    move = tuple(tuple(coord) for coord in entry['move'])
+    if move not in legal:
+        return result('UNVERIFIED')
+    return result('PROVEN', move, entry['steps'], proof['defender_policy'])
+
+
+# Optimized Minimax with Alpha-Beta Pruning and Move Ordering
+def _minimax_ab_internal(
+    state: GameState,
+    depth: int,
+    alpha: float,
+    beta: float,
+    maximizing: bool,
+    weights: Dict[str, float],
+    telemetry: SearchTelemetry,
+    deadline: Optional[float] = None,
+) -> Tuple[float, Optional[Tuple[Tuple[int, int], Tuple[int, int]]]]:
     current_player = 0 if maximizing else 1
 
-    if depth == 0 or state.winner is not None or (deadline and time.time() > deadline):
-        return evaluate_non_transitive(state, weights), None
+    if deadline is not None and time.perf_counter() >= deadline:
+        raise SearchTimeout
+    if state.winner is not None:
+        return ((100000.0 + depth) if state.winner == 0 else (-100000.0 - depth)), None
 
     valid_moves = state.get_valid_moves(current_player)
     if not valid_moves:
         # Player without moves loses
-        return (100000.0 if not maximizing else -100000.0), None
+        return ((100000.0 + depth) if not maximizing else (-100000.0 - depth)), None
+
+    if depth == 0:
+        return evaluate_non_transitive(state, weights), None
 
     ordered = order_moves_mvv_lva(valid_moves, state, current_player)
     telemetry.nodes_generated += len(ordered)
@@ -240,77 +361,47 @@ def _minimax_ab_internal(state: GameState, depth: int, alpha: float, beta: float
 
     target_win_coord = state.target_corners[current_player]
 
-    if maximizing:
-        max_eval = -math.inf
-        for m in ordered:
-            if deadline and time.time() > deadline:
-                break
-            telemetry.nodes_evaluated += 1
-            s, e = m
-            piece = state.board[s[0]][s[1]]
-            target_piece = state.board[e[0]][e[1]]
-
-            # Execute in-place
-            state.board[e[0]][e[1]] = piece
-            state.board[s[0]][s[1]] = None
-            old_winner = state.winner
-            if e == target_win_coord:
-                state.winner = 0
-
-            if state.winner == 0:
-                val = 100000.0
-            else:
-                val, _ = _minimax_ab_internal(state, depth - 1, alpha, beta, False, weights, telemetry, deadline)
-
-            # Revert in-place
-            state.board[s[0]][s[1]] = piece
-            state.board[e[0]][e[1]] = target_piece
+    best_eval = -math.inf if maximizing else math.inf
+    for index, m in enumerate(ordered):
+        if deadline is not None and time.perf_counter() >= deadline:
+            raise SearchTimeout
+        telemetry.nodes_evaluated += 1
+        #start, end = movementOrder
+        s, e = m
+        piece = state.board[s[0]][s[1]]
+        target_piece = state.board[e[0]][e[1]]
+        old_winner = state.winner
+        state.board[e[0]][e[1]], state.board[s[0]][s[1]] = piece, None
+        if e == target_win_coord:
+            state.winner = current_player
+        try:
+            val, _ = _minimax_ab_internal(
+                state,
+                depth - 1,
+                alpha,
+                beta,
+                not maximizing,
+                weights,
+                telemetry,
+                deadline,
+            )
+        finally:
+            state.board[s[0]][s[1]], state.board[e[0]][e[1]] = piece, target_piece
             state.winner = old_winner
-
-            if val > max_eval:
-                max_eval = val
-                best_move = m
+        if (maximizing and val > best_eval) or (not maximizing and val < best_eval):
+            best_eval, best_move = val, m
+        if maximizing:
             alpha = max(alpha, val)
-            if beta <= alpha:
-                break  # Alpha-Beta cutoff
-
-        return max_eval, best_move
-    else:
-        min_eval = math.inf
-        for m in ordered:
-            if deadline and time.time() > deadline:
-                break
-            telemetry.nodes_evaluated += 1
-            s, e = m
-            piece = state.board[s[0]][s[1]]
-            target_piece = state.board[e[0]][e[1]]
-
-            state.board[e[0]][e[1]] = piece
-            state.board[s[0]][s[1]] = None
-            old_winner = state.winner
-            if e == target_win_coord:
-                state.winner = 1
-
-            if state.winner == 1:
-                val = -100000.0
-            else:
-                val, _ = _minimax_ab_internal(state, depth - 1, alpha, beta, True, weights, telemetry, deadline)
-
-            state.board[s[0]][s[1]] = piece
-            state.board[e[0]][e[1]] = target_piece
-            state.winner = old_winner
-
-            if val < min_eval:
-                min_eval = val
-                best_move = m
+        else:
             beta = min(beta, val)
-            if beta <= alpha:
-                break  # Alpha-Beta cutoff
+        if beta <= alpha:
+            telemetry.nodes_pruned += len(ordered) - index - 1
+            break
+    return best_eval, best_move
 
-        return min_eval, best_move
 
-
-# Baseline 2: Vanilla Minimax (Depth 3, Static Material, No Pruning)
+# Vanilla Minimax (Baseline Model)
+# menghitung score minimax dengan menggunakan static piece value * jumlahnya -> kemudian hitung selisihnya
 def _evaluate_static_material(state: GameState) -> float:
     if state.winner == 0:
         return 100000.0
@@ -331,8 +422,9 @@ def _evaluate_static_material(state: GameState) -> float:
     return p0_val - p1_val
 
 
-def _minimax_vanilla_internal(state: GameState, depth: int, maximizing: bool,
-                              telemetry: SearchTelemetry) -> Tuple[float, Optional[Tuple[Tuple[int, int], Tuple[int, int]]]]:
+def _minimax_vanilla_internal(
+    state: GameState, depth: int, maximizing: bool, telemetry: SearchTelemetry
+) -> Tuple[float, Optional[Tuple[Tuple[int, int], Tuple[int, int]]]]:
     current_player = 0 if maximizing else 1
 
     if depth == 0 or state.winner is not None:
@@ -402,66 +494,79 @@ def _minimax_vanilla_internal(state: GameState, depth: int, maximizing: bool,
         return min_eval, best_move
 
 
-def get_defender_move(state: GameState, agent_model: str = 'proposed_d6',
-                      depth: int = 6, weights: Optional[Dict[str, float]] = None) -> Tuple[Optional[Tuple[Tuple[int, int], Tuple[int, int]]], float, SearchTelemetry]:
+# called by any model mode
+# get AI move
+# searchtelemetry baru dibentuk
+def get_defender_move(
+    state: GameState,
+    agent_model: str = "proposed_d6",
+    depth: Optional[int] = None,
+    weights: Optional[Dict[str, float]] = None,
+    time_budget: float = 1.95,
+    rng=None,
+) -> Tuple[Optional[Tuple[Tuple[int, int], Tuple[int, int]]], float, SearchTelemetry]:
     """
     Main interface for AI Defender:
     Returns (best_move, eval_score, telemetry)
     where best_move is ((start_r, start_c), (end_r, end_c)).
     Optimal defensive action tuple A = (SourceCoord, TargetCoord, EvalScore).
     """
+    t0 = time.perf_counter()
     telemetry = SearchTelemetry()
-    valid_moves = state.get_valid_moves(1)  # Defender is Player 1
+    valid_moves = state.get_valid_moves(1)
     if not valid_moves:
+        telemetry.t_turn = time.perf_counter() - t0
         return None, 100000.0, telemetry
 
-    # Instant victory check for defender
-    defender_target = state.target_corners[1]
-    for m in valid_moves:
-        if m[1] == defender_target:
-            telemetry.nodes_generated = len(valid_moves)
-            telemetry.nodes_evaluated = 1
-            telemetry.t_turn = 0.001
-            return m, -100000.0, telemetry
-
     w = weights if weights else DEFAULT_PROPOSAL_WEIGHTS
-    t0 = time.time()
 
     model_clean = agent_model.lower()
 
-    if 'baseline_1' in model_clean or 'random' in model_clean:
-        # Baseline 1: Random Move Agent
-        chosen = random.choice(valid_moves)
-        telemetry.nodes_generated = len(valid_moves)
-        telemetry.nodes_evaluated = 1
-        t1 = time.time()
-        telemetry.t_turn = max(0.001, t1 - t0)
+    if "baseline_1" in model_clean or "random" in model_clean:
+        # Random Move Baseline Agent
+        chosen = (rng or random).choice(valid_moves)
+        telemetry.t_turn = time.perf_counter() - t0
         return chosen, 0.0, telemetry
 
-    elif 'baseline_2' in model_clean or 'vanilla' in model_clean:
-        # Baseline 2: Vanilla Minimax Agent (d=3, static, no pruning)
+    elif "baseline_2" in model_clean or "vanilla" in model_clean:
+        # Vanilla Minimax Baseline Agent
         d = 3 if depth is None else depth
-        eval_score, move = _minimax_vanilla_internal(state, depth=d, maximizing=False, telemetry=telemetry)
-        t1 = time.time()
-        telemetry.t_turn = max(0.001, t1 - t0)
+        eval_score, move = _minimax_vanilla_internal(
+            state, depth=d, maximizing=False, telemetry=telemetry
+        )
+        telemetry.completed_depth = d
+        telemetry.t_turn = time.perf_counter() - t0
         return move or random.choice(valid_moves), eval_score, telemetry
 
     else:
-        # Proposed Method: Optimized Minimax with Alpha-Beta Pruning, MVV-LVA & E(s)
+        # Optimized Minimax Agent with Alpha-Beta Pruning
         d = depth if depth is not None else 6
-        deadline = t0 + 1.95  # Strict 2.0s time budget as required in proposal Table 1 & 3
-        eval_score, move = _minimax_ab_internal(state, depth=d, alpha=-math.inf, beta=math.inf,
-                                                maximizing=False, weights=w, telemetry=telemetry, deadline=deadline)
-        t1 = time.time()
-        telemetry.t_turn = max(0.001, t1 - t0)
-        return move or random.choice(valid_moves), eval_score, telemetry
+        deadline = t0 + max(0.0, time_budget)
+        move, eval_score = valid_moves[0], evaluate_non_transitive(state, w)
+        for horizon in range(1, d + 1):
+            try:
+                score, candidate = _minimax_ab_internal(
+                    state, horizon, -math.inf, math.inf, False, w, telemetry, deadline
+                )
+            except SearchTimeout:
+                telemetry.timed_out = True
+                break
+            move, eval_score = candidate or move, score
+            telemetry.completed_depth = horizon
+        telemetry.t_turn = time.perf_counter() - t0
+        return move, eval_score, telemetry
 
 
 # =====================================================================
 # BACKWARD COMPATIBILITY INTERFACES (For existing PvE modes)
 # =====================================================================
 
-def evaluate_board(state: GameState, player: int, difficulty: str = 'normal') -> float:
+
+# menentukan nilai papan
+# skor = nilai_AI - nilai_player + threat_differential
+# ini menggunakan PIECE_VALUE sehingga perhitungan nya masih STATIS
+# yang dinamis pakai evaluate_non_transitive()
+def evaluate_board(state: GameState, player: int, difficulty: str = "normal") -> float:
     opponent = 1 - player
     if state.winner == player:
         return 100000.0
@@ -501,7 +606,7 @@ def evaluate_board(state: GameState, player: int, difficulty: str = 'normal') ->
                 opp_score += val + opp_pos_bonus
 
     threat_differential = 0.0
-    if difficulty in ('normal', 'hard'):
+    if difficulty in ("normal", "hard"):
         if min_opp_dist <= 1:
             threat_differential -= 250.0
         if min_my_dist <= 1:
@@ -510,7 +615,9 @@ def evaluate_board(state: GameState, player: int, difficulty: str = 'normal') ->
     return (my_score - opp_score) + threat_differential
 
 
-def order_moves(moves: List[Tuple[Tuple[int, int], Tuple[int, int]]], state: GameState, player: int) -> List[Tuple[Tuple[int, int], Tuple[int, int]]]:
+def order_moves(
+    moves: List[Tuple[Tuple[int, int], Tuple[int, int]]], state: GameState, player: int
+) -> List[Tuple[Tuple[int, int], Tuple[int, int]]]:
     target = state.target_corners[player]
 
     def score_move(move):
@@ -538,11 +645,21 @@ class SearchStats:
         self.nodes = 0
 
 
-def minimax(state: GameState, depth: int, alpha: float, beta: float,
-            maximizing: bool, player: int, difficulty: str = 'normal', stats: Optional[SearchStats] = None) -> Tuple[float, Optional[Tuple[Tuple[int, int], Tuple[int, int]]]]:
+# use fixed piece value, while the minimax_a_b use dynamic piece value
+def minimax(
+    state: GameState,
+    depth: int,
+    alpha: float,
+    beta: float,
+    maximizing: bool,
+    player: int,
+    difficulty: str = "normal",
+    stats: Optional[SearchStats] = None,
+) -> Tuple[float, Optional[Tuple[Tuple[int, int], Tuple[int, int]]]]:
     if stats:
         stats.nodes += 1
 
+    # for break the recursive
     if depth == 0 or state.winner is not None:
         return evaluate_board(state, player, difficulty), None
 
@@ -559,7 +676,9 @@ def minimax(state: GameState, depth: int, alpha: float, beta: float,
         for move in ordered:
             state_clone = state.clone()
             state_clone.make_move(move[0], move[1])
-            eval_val, _ = minimax(state_clone, depth - 1, alpha, beta, False, player, difficulty, stats)
+            eval_val, _ = minimax(
+                state_clone, depth - 1, alpha, beta, False, player, difficulty, stats
+            )
             if eval_val > max_eval:
                 max_eval = eval_val
                 best_move = move
@@ -572,7 +691,9 @@ def minimax(state: GameState, depth: int, alpha: float, beta: float,
         for move in ordered:
             state_clone = state.clone()
             state_clone.make_move(move[0], move[1])
-            eval_val, _ = minimax(state_clone, depth - 1, alpha, beta, True, player, difficulty, stats)
+            eval_val, _ = minimax(
+                state_clone, depth - 1, alpha, beta, True, player, difficulty, stats
+            )
             if eval_val < min_eval:
                 min_eval = eval_val
                 best_move = move
@@ -584,7 +705,9 @@ def minimax(state: GameState, depth: int, alpha: float, beta: float,
 
 class AIEngine:
     @staticmethod
-    def get_move_and_delay(state: GameState, difficulty: str = 'normal') -> Tuple[Optional[Tuple[Tuple[int, int], Tuple[int, int]]], float]:
+    def get_move_and_delay(
+        state: GameState, difficulty: str = "normal"
+    ) -> Tuple[Optional[Tuple[Tuple[int, int], Tuple[int, int]]], float]:
         player = state.current_turn
         valid_moves = state.get_valid_moves(player)
         if not valid_moves:
@@ -598,40 +721,64 @@ class AIEngine:
         diff = difficulty.lower()
         stats = SearchStats()
 
-        if diff == 'proposed':
-            # Use proposed Alpha-Beta search at depth 6
-            best_m, _, telemetry = get_defender_move(state, 'proposed_d6', depth=6)
+        if diff == "proposed":
+            # Search using optimized agent
+            best_m, _, telemetry = get_defender_move(state, "proposed_d6", depth=6)
             delay = min(2.0, max(0.5, telemetry.t_turn))
             return best_m or random.choice(valid_moves), delay
 
-        elif diff == 'easy':
+        elif diff == "easy":
             scored_moves = []
             for m in valid_moves:
                 clone = state.clone()
                 clone.make_move(m[0], m[1])
-                score = evaluate_board(clone, player, 'easy')
+                score = evaluate_board(clone, player, "easy")
                 scored_moves.append((score, m))
                 stats.nodes += 1
             scored_moves.sort(key=lambda x: x[0], reverse=True)
-            top_moves = [m for _, m in scored_moves[:min(3, len(scored_moves))]]
-            chosen = random.choice(top_moves) if random.random() < 0.35 and len(top_moves) > 1 else top_moves[0]
+            top_moves = [m for _, m in scored_moves[: min(3, len(scored_moves))]]
+            chosen = (
+                random.choice(top_moves)
+                if random.random() < 0.35 and len(top_moves) > 1
+                else top_moves[0]
+            )
             delay = 1.0 + (min(len(valid_moves), 15) / 30.0)
             return chosen, delay
 
-        elif diff == 'hard':
-            _, move = minimax(state, depth=3, alpha=-math.inf, beta=math.inf, maximizing=True, player=player, difficulty='hard', stats=stats)
+        elif diff == "hard":
+            _, move = minimax(
+                state,
+                depth=3,
+                alpha=-math.inf,
+                beta=math.inf,
+                maximizing=True,
+                player=player,
+                difficulty="hard",
+                stats=stats,
+            )
             chosen = move or random.choice(valid_moves)
             node_factor = min(stats.nodes / 200.0, 2.0)
             delay = 2.4 + node_factor
             return chosen, delay
 
         else:
-            _, move = minimax(state, depth=2, alpha=-math.inf, beta=math.inf, maximizing=True, player=player, difficulty='normal', stats=stats)
+            _, move = minimax(
+                state,
+                depth=2,
+                alpha=-math.inf,
+                beta=math.inf,
+                maximizing=True,
+                player=player,
+                difficulty="normal",
+                stats=stats,
+            )
             chosen = move or random.choice(valid_moves)
             node_factor = min(stats.nodes / 100.0, 1.2)
             delay = 1.6 + node_factor
             return chosen, delay
 
 
-def get_ai_move_with_delay(state: GameState, difficulty: str = 'normal') -> Tuple[Optional[Tuple[Tuple[int, int], Tuple[int, int]]], float]:
+def get_ai_move_with_delay(
+    state: GameState, difficulty: str = "normal"
+) -> Tuple[Optional[Tuple[Tuple[int, int], Tuple[int, int]]], float]:
     return AIEngine.get_move_and_delay(state, difficulty)
