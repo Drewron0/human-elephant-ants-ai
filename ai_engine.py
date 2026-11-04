@@ -27,8 +27,11 @@ def chebyshev_distance(p1: Tuple[int, int], p2: Tuple[int, int]) -> int:
 # E(s)
 # E(s) = wm * M(s) + wc * C(s) + wp * P(s) + wt * T(s)
 # =====================================================================
-
-
+# menentukan nilai papan secara dinamis (memperhitungkan posisi dan jumlah PIECE lawan)
+# wm = Bobot material: nilai bidak dinamis berdasarkan jumlah mangsa dan predator.
+# wc = Bobot kedekatan mangsa–predator: peluang menangkap dan ancaman ditangkap.
+# wp = Bobot posisi dan mobilitas: penguasaan tengah papan serta kebebasan bergerak.
+# wt = Bobot target: kemajuan bidak menuju pojok tujuan.
 def evaluate_non_transitive(
     state: GameState, weights: Optional[Dict[str, float]] = None
 ) -> float:
@@ -482,7 +485,8 @@ def get_defender_move(
 
 # menentukan nilai papan
 # skor = nilai_AI - nilai_player + threat_differential
-# ini menggunakan PIECE_VALUE sehingga perhitungan nya masih statis
+# ini menggunakan PIECE_VALUE sehingga perhitungan nya masih STATIS
+# yang dinamis pakai evaluate_non_transitive()
 def evaluate_board(state: GameState, player: int, difficulty: str = "normal") -> float:
     opponent = 1 - player
     if state.winner == player:
