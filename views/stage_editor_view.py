@@ -31,6 +31,7 @@ class StageEditorView(tk.Frame):
         self.board_size = stage_dict.get('board_size', 6) if stage_dict else 6
         self.stage_title = stage_dict.get('title', 'My Custom Stage') if stage_dict else 'My Custom Stage'
         self.stage_desc = stage_dict.get('description', '') if stage_dict else 'Custom tactical puzzle scenario.'
+        self.stage_s_optimal = stage_dict.get('s_optimal', 20) if stage_dict else 20
 
         # Placed pieces: dict mapping (r, c) -> (owner, p_type)
         self.placed_pieces: Dict[Tuple[int, int], Tuple[int, str]] = {}
@@ -367,17 +368,26 @@ class StageEditorView(tk.Frame):
             return False
 
     def _save_stage(self):
-        if not self._verify_winnability(silent=True):
-            modal = ThemedModal(self, "Cannot Save Unverified Stage", min_width=360)
-            tk.Label(modal.body, text="Stage needs a forced-win proof before saving.\nTry a simpler layout within the verification budget.", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['danger']).pack(pady=10)
-            ButtonPrimary(modal.footer, text="Understood", command=modal.dismiss).pack(side=tk.RIGHT)
-            return
-
         title = self.var_title.get().strip() or "Custom Stage"
         desc = self.var_desc.get().strip() or "Custom tactical scenario."
         pieces_list = [(r, c, owner, pt) for (r, c), (owner, pt) in self.placed_pieces.items()]
-        s_opt = self.last_verification.get('s_optimal', 6) if self.last_verification else 6
-        path = self.last_verification.get('path', []) if self.last_verification else []
+
+        player_pieces = [p for p in pieces_list if p[2] == 0]
+        if not player_pieces:
+            modal = ThemedModal(self, "No Player Pieces", min_width=360)
+            tk.Label(modal.body, text="Place at least one green Player piece before saving.", font=(FONT_NAME, 9), bg=THEME['surface'], fg=THEME['danger']).pack(pady=10)
+            ButtonPrimary(modal.footer, text="OK", command=modal.dismiss).pack(side=tk.RIGHT)
+            return
+        if self.last_verification and self.last_verification.get('winnable'):
+            s_opt = self.last_verification.get('s_optimal', 20)
+            path = self.last_verification.get('path', [])
+            ver_status = 'VERIFIED'
+            ver_method = 'bounded_verifier'
+        else:
+            s_opt = self.stage_s_optimal if hasattr(self, 'stage_s_optimal') else 20
+            path = []
+            ver_status = 'UNVERIFIED'
+            ver_method = 'manual'
 
         payload = {
             'id': self.edit_stage_id,
@@ -387,8 +397,8 @@ class StageEditorView(tk.Frame):
             's_optimal': s_opt,
             'pieces': pieces_list,
             'optimal_path': path,
-            'verification_status': 'VERIFIED',
-            'verification_method': 'bounded_verifier',
+            'verification_status': ver_status,
+            'verification_method': ver_method,
             'is_custom': True
         }
 

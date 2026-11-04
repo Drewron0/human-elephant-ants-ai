@@ -56,7 +56,7 @@ def bfs_safe_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
 
 def verify_puzzle(board_size: int, pieces: List[Tuple[int, int, int, str]],
                   target_coord: Optional[Tuple[int, int]] = None, max_steps: int = 14,
-                  time_budget: float = 1.0, node_budget: int = 30000) -> Dict[str, Any]:
+                  time_budget: float = 5.0, node_budget: int = 30000) -> Dict[str, Any]:
     """Prove the shortest forced corner win, or explicitly return an unknown result.
 
     The bounded search considers every legal defensive reply. A geometric
@@ -250,107 +250,48 @@ class PuzzleScenario:
 PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
     'stage_6x6_01': PuzzleScenario(
         id_str='stage_6x6_01',
-        title='Stage 1: Advance Guard',
-        description='Coordinate Human and Elephant to advance past dispersed defenders.',
+        title='Stage 1',
+        description='Custom tactical puzzle scenario.',
         board_size=6,
-        s_optimal=6,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (2, 4, 1, 'H'), (3, 3, 1, 'A')]
+        s_optimal=20,
+        pieces=[(2, 1, 0, 'H'), (3, 3, 0, 'E'), (4, 5, 0, 'A'), (3, 5, 1, 'E'), (2, 3, 1, 'H'), (1, 1, 1, 'A')]
     ),
     'stage_6x6_02': PuzzleScenario(
         id_str='stage_6x6_02',
-        title='Stage 2: Flank Escort',
-        description='Ant screens against AI Elephant while Human heads toward the corner.',
+        title='Stage 2',
+        description='Custom tactical puzzle scenario.',
         board_size=6,
-        s_optimal=5,
-        pieces=[(5, 0, 0, 'H'), (4, 0, 0, 'A'), (2, 3, 1, 'A'), (4, 5, 1, 'E')]
+        s_optimal=20,
+        pieces=[(3, 1, 0, 'H'), (3, 4, 0, 'A'), (1, 4, 1, 'H'), (4, 2, 1, 'A')]
     ),
     'stage_6x6_03': PuzzleScenario(
         id_str='stage_6x6_03',
-        title='Stage 3: The Pincer',
-        description='Dual-front pressure with Human and Ant forcing enemy sentries to retreat.',
+        title='Stage 3',
+        description='Custom tactical puzzle scenario.',
         board_size=6,
-        s_optimal=5,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'A'), (0, 3, 1, 'E'), (1, 4, 1, 'A')]
+        s_optimal=20,
+        pieces=[(2, 0, 0, 'A'), (3, 2, 1, 'E'), (4, 1, 0, 'H'), (4, 2, 0, 'A'), (1, 1, 1, 'H'), (2, 5, 1, 'A'), (3, 4, 0, 'E'), (2, 4, 0, 'H'), (1, 4, 1, 'E'), (0, 3, 1, 'A'), (5, 5, 1, 'H'), (3, 1, 0, 'E')]
     ),
     'stage_6x6_04': PuzzleScenario(
         id_str='stage_6x6_04',
-        title='Stage 4: Sentry Gate',
-        description='Heavy Elephants defend perimeter. Use Elephant escort through the gap.',
+        title='Stage 4',
+        description='Stage 4',
         board_size=6,
-        s_optimal=7,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 0, 0, 'A'), (1, 4, 1, 'E'), (2, 3, 1, 'H'), (3, 2, 1, 'A')]
+        s_optimal=20,
+        pieces=[(1, 1, 0, 'H'), (3, 2, 0, 'E'), (3, 3, 0, 'A'), (2, 2, 1, 'H'), (2, 1, 1, 'A'), (5, 1, 0, 'E'), (4, 3, 1, 'A'), (0, 4, 1, 'H')]
     ),
     'stage_6x6_05': PuzzleScenario(
         id_str='stage_6x6_05',
-        title='Stage 5: Crossfire Defense',
-        description='Ant maneuvers around central Elephant threat to pierce defensive lines.',
+        title='Stage 5',
+        description='Custom tactical puzzle scenario.',
         board_size=6,
-        s_optimal=6,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'A'), (3, 2, 1, 'E'), (2, 4, 1, 'H')]
-    ),
-    'stage_6x6_06': PuzzleScenario(
-        id_str='stage_6x6_06',
-        title='Stage 6: The Chokepoint',
-        description='Elephant escort anchors the center while advancing toward objective.',
-        board_size=6,
-        s_optimal=8,
-        pieces=[(5, 0, 0, 'H'), (4, 1, 0, 'E'), (2, 2, 1, 'E'), (2, 4, 1, 'A')]
-    ),
-    'stage_6x6_07': PuzzleScenario(
-        id_str='stage_6x6_07',
-        title='Stage 7: The Ridge',
-        description='Elephant pushes through outer corridor to bypass layered barricade.',
-        board_size=6,
-        s_optimal=5,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 1, 0, 'A'), (1, 3, 1, 'E'), (2, 4, 1, 'H'), (0, 3, 1, 'A')]
-    ),
-    'stage_6x6_08': PuzzleScenario(
-        id_str='stage_6x6_08',
-        title='Stage 8: Patrol Infiltration',
-        description='Elephant squad threads between patrol zones along the edge.',
-        board_size=6,
-        s_optimal=7,
-        pieces=[(5, 0, 0, 'H'), (4, 0, 0, 'E'), (5, 2, 0, 'A'), (2, 2, 1, 'E'), (1, 4, 1, 'H'), (3, 4, 1, 'A')]
-    ),
-    'stage_6x6_09': PuzzleScenario(
-        id_str='stage_6x6_09',
-        title='Stage 9: Corridor Sweep',
-        description='Double defender line blocks diagonal. Navigate around outer perimeter.',
-        board_size=6,
-        s_optimal=6,
-        pieces=[(5, 0, 0, 'H'), (4, 1, 0, 'E'), (5, 2, 0, 'A'), (1, 4, 1, 'E'), (3, 3, 1, 'A'), (2, 5, 1, 'H')]
-    ),
-    'stage_6x6_10': PuzzleScenario(
-        id_str='stage_6x6_10',
-        title='Stage 10: The Citadel',
-        description='Full multi-piece tactical engagement demanding optimal piece synergy.',
-        board_size=6,
-        s_optimal=6,
-        pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 0, 0, 'A'), (3, 3, 1, 'E'), (2, 3, 1, 'E'), (1, 4, 1, 'E'), (2, 4, 1, 'A'), (3, 1, 1, 'H')]
+        s_optimal=20,
+        pieces=[(4, 2, 0, 'A'), (3, 5, 1, 'E'), (3, 1, 0, 'E'), (0, 3, 1, 'E'), (1, 3, 1, 'E'), (2, 4, 1, 'E'), (2, 5, 1, 'E'), (0, 2, 1, 'E'), (1, 4, 1, 'E'), (1, 5, 1, 'H')]
     )
 }
 
-# Classic Benchmark Scenarios
-PRECONFIGURED_STAGES_9X9: Dict[str, PuzzleScenario] = {
-    'p10_proposal': PuzzleScenario(
-        id_str='p10_proposal',
-        title='Tactical Benchmark (9x9)',
-        description='Tactical engagement. AI acts as optimal defender.',
-        board_size=9,
-        s_optimal=8,
-        pieces=[(8, 0, 0, 'H'), (8, 1, 0, 'E'), (7, 0, 0, 'A'), (2, 2, 1, 'A'), (2, 5, 1, 'E'), (4, 3, 1, 'E'), (6, 6, 1, 'H')]
-    ),
-    'p12_labyrinth': PuzzleScenario(
-        id_str='p12_labyrinth',
-        title='Grand Labyrinth (9x9)',
-        description='Extended defense perimeter requiring cooperative piece maneuvering.',
-        board_size=9,
-        s_optimal=10,
-        pieces=[(8, 0, 0, 'H'), (8, 2, 0, 'E'), (7, 0, 0, 'A'), (8, 3, 1, 'A'), (3, 5, 1, 'E'), (5, 2, 1, 'E')]
-    )
-}
+PRECONFIGURED_STAGES_9X9: Dict[str, PuzzleScenario] = {}
 
-# Unified dictionary for backward compatibility
 PRECONFIGURED_PUZZLES: Dict[str, PuzzleScenario] = {
     **PRECONFIGURED_STAGES_6X6,
     **PRECONFIGURED_STAGES_9X9

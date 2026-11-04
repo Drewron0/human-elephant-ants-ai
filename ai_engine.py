@@ -4,6 +4,7 @@ import time
 from typing import Tuple, Optional, List, Dict, Any
 from game_logic import GameState, Piece, BEATS, PREDATORS
 
+# For baseline
 PIECE_VALUES = {"E": 14.0, "H": 12.0, "A": 10.0}
 
 DEFAULT_EVALUATION_WEIGHTS = {"wm": 1.0, "wc": 1.5, "wp": 0.5, "wt": 2.5}
@@ -288,6 +289,7 @@ def _minimax_ab_internal(
         if deadline is not None and time.perf_counter() >= deadline:
             raise SearchTimeout
         telemetry.nodes_evaluated += 1
+        #start, end = movementOrder
         s, e = m
         piece = state.board[s[0]][s[1]]
         target_piece = state.board[e[0]][e[1]]

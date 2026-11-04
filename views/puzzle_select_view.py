@@ -80,17 +80,11 @@ class PuzzleSelectView(tk.Frame):
         tab_frame = tk.Frame(self.left_pane, bg=THEME['surface_card'], padx=6, pady=4)
         tab_frame.pack(fill=tk.X, padx=16, pady=(12, 8))
 
-        self.btn_tab_preset = ButtonSecondary(tab_frame, text="Standard (6x6)", command=lambda: self._set_category("preset_6x6"))
+        self.btn_tab_preset = ButtonSecondary(tab_frame, text="Preset Stages", command=lambda: self._set_category("preset_6x6"))
         self.btn_tab_preset.pack(side=tk.LEFT, padx=3)
-
-        self.btn_tab_9x9 = ButtonSecondary(tab_frame, text="Large Board (9x9)", command=lambda: self._set_category("preset_9x9"))
-        self.btn_tab_9x9.pack(side=tk.LEFT, padx=3)
 
         self.btn_tab_custom = ButtonSecondary(tab_frame, text="Custom Stages", command=lambda: self._set_category("custom"))
         self.btn_tab_custom.pack(side=tk.LEFT, padx=3)
-
-        self.btn_tab_random = ButtonSecondary(tab_frame, text="Random Challenge", command=lambda: self._set_category("random"))
-        self.btn_tab_random.pack(side=tk.LEFT, padx=3)
 
         # Scrollable grid of stage thumbnails
         grid_container = tk.Frame(self.left_pane, bg=THEME['bg'])
@@ -261,8 +255,9 @@ class PuzzleSelectView(tk.Frame):
     def _highlight_active_tab(self):
         tabs = [
             ("preset_6x6", self.btn_tab_preset),
-            ("preset_9x9", self.btn_tab_9x9)
         ]
+        if hasattr(self, 'btn_tab_9x9'):
+            tabs.append(("preset_9x9", self.btn_tab_9x9))
         if hasattr(self, 'btn_tab_custom'):
             tabs.append(("custom", self.btn_tab_custom))
         if hasattr(self, 'btn_tab_random'):
