@@ -71,7 +71,7 @@ class PuzzleGameView(tk.Frame):
 
         tk.Label(
             title_box,
-            text=f"{self.scenario.step_label}: {self.session.s_optimal} | Move Limit: {self.session.s_max}",
+            text=f"{self.scenario.step_summary} | Move Limit: {self.session.s_max}",
             font=(FONT_NAME, 9),
             bg=THEME['surface'],
             fg=THEME['text_muted']
@@ -153,10 +153,10 @@ class PuzzleGameView(tk.Frame):
 
         s_row = tk.Frame(strat_card, bg=THEME['surface_light'])
         s_row.pack(fill=tk.X)
-        self.lbl_steps = tk.Label(s_row, text=f"Steps: 0 / {self.session.s_optimal}", font=(FONT_NAME, 10, "bold"), bg=THEME['surface_light'], fg=THEME['text'])
+        self.lbl_steps = tk.Label(s_row, text="Steps: 0", font=(FONT_NAME, 10, "bold"), bg=THEME['surface_light'], fg=THEME['text'])
         self.lbl_steps.pack(side=tk.LEFT)
 
-        self.lbl_delay = tk.Label(s_row, text="Delay: 0 moves", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_light'], fg=THEME['success'])
+        self.lbl_delay = tk.Label(s_row, text="Extra: 0 moves", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_light'], fg=THEME['success'])
         self.lbl_delay.pack(side=tk.RIGHT)
 
         st_row = tk.Frame(strat_card, bg=THEME['surface_light'])
@@ -450,15 +450,15 @@ class PuzzleGameView(tk.Frame):
         cur = self.session.current_attempt_steps
         s_opt = self.session.s_optimal
         s_max = self.session.s_max
-        self.lbl_steps.config(text=f"Steps: {cur} / {s_opt} (Max: {s_max})")
+        self.lbl_steps.config(text=f"Steps: {cur} / {s_opt if s_opt is not None else '--'} (Max: {s_max})")
 
         delta = self.session.delay_margin
-        if delta == 0:
-            self.lbl_delay.config(text="Extra vs reference: 0" if self.scenario.verification_status != 'VERIFIED'
-                                  else "Delay: 0 moves", fg=THEME['success'])
+        if s_opt is None:
+            self.lbl_delay.config(text="Extra: N/A", fg=THEME['text_muted'])
+        elif delta == 0:
+            self.lbl_delay.config(text="Extra: 0 moves", fg=THEME['success'])
         else:
-            label = 'Delay' if self.scenario.verification_status == 'VERIFIED' else 'Extra vs reference'
-            self.lbl_delay.config(text=f"{label}: +{delta} moves", fg=THEME['warning'])
+            self.lbl_delay.config(text=f"Extra: +{delta} moves", fg=THEME['warning'])
 
         self.lbl_sub_stats.config(
             text=f"Resets: {self.session.resets_count} | Undos: {self.session.undo_count}"
@@ -572,8 +572,8 @@ class PuzzleGameView(tk.Frame):
 
             summary = (
                 f"You reached the corner in {self.session.current_attempt_steps} steps "
-                f"({self.scenario.step_label}: {self.session.s_optimal}).\n"
-                f"Extra vs reference: +{self.session.delay_margin} moves | Time: {time_spent}s."
+                f"({self.scenario.step_summary}).\n"
+                f"Extra vs minimum: +{self.session.delay_margin} moves | Time: {time_spent}s."
             )
         else:
             tk.Label(
@@ -643,7 +643,8 @@ class PuzzleGameView(tk.Frame):
         content = (
             "1. Objective:\n"
             f"   Navigate your piece to the opponent's star corner within Move Limit={self.session.s_max} moves.\n"
-            f"   {self.scenario.step_label}: {self.session.s_optimal} steps.\n\n"
+            f"   {self.scenario.step_summary}.\n"
+            "   The minimum assumes other pieces stay fixed; AI replies can change the route.\n\n"
             "2. Combat Hierarchy:\n"
             "   Elephant (E) defeats Human (H)\n"
             "   Human (H) defeats Ant (A)\n"

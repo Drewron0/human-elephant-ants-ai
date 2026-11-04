@@ -8,6 +8,8 @@ from puzzle_logic import (
     find_optimal_winning_path,
     generate_winnable_puzzle,
     PRECONFIGURED_STAGES_6X6,
+    PRECONFIGURED_PUZZLES,
+    make_puzzle_move,
     PuzzleScenario,
 )
 from ai_engine import evaluate_non_transitive, get_defender_move, DEFAULT_EVALUATION_WEIGHTS
@@ -50,11 +52,62 @@ class TestGameLogic(unittest.TestCase):
 
 class TestPuzzleLogic(unittest.TestCase):
     # Tests BFS safe path search, preset stages, and random puzzle generation
-    def test_legacy_presets_do_not_claim_unproven_optima(self) -> None:
-        for stage_key, scenario in PRECONFIGURED_STAGES_6X6.items():
-            self.assertEqual(scenario.verification_status, 'UNVERIFIED', stage_key)
-            self.assertEqual(scenario.optimal_path, [])
-            self.assertIn('unverified', scenario.step_label)
+    def test_presets_have_replayable_minimum_routes_with_fixed_enemies(self) -> None:
+        for stage_key, scenario in PRECONFIGURED_PUZZLES.items():
+            with self.subTest(stage=stage_key):
+                self.assertIn('fixed enemies', scenario.step_label)
+                self.assertIsNotNone(scenario.s_optimal)
+                self.assertEqual(len(scenario.optimal_path) - 1, scenario.s_optimal)
+                self.assertEqual(scenario.s_max, 3 * scenario.s_optimal)
+                state = scenario.create_initial_state()
+                for start, end in zip(scenario.optimal_path, scenario.optimal_path[1:]):
+                    state.current_turn = 0  # Defenders remain stationary for the baseline.
+                    self.assertIn((start, end), state.get_valid_moves(0))
+                    make_puzzle_move(state, start, end)
+                self.assertEqual(state.winner, 0)
+
+        self.assertEqual(PRECONFIGURED_STAGES_6X6['stage_6x6_01'].s_optimal, 5)
+        self.assertEqual(PRECONFIGURED_STAGES_6X6['stage_6x6_06'].s_optimal, 4)
+
+    def test_minimum_counts_obstacle_detour_and_ignores_stale_saved_count(self) -> None:
+        pieces = [(3, 0, 0, 'H')] + [(1, c, 1, 'E') for c in range(3)]
+        scenario = PuzzleScenario.from_dict(dict(
+            id='detour', board_size=4, pieces=pieces, s_optimal=6,
+            optimal_path=[(3, 0), (0, 3)]))
+        # Three diagonal moves would have to pass through blocked (1, 2).
+        self.assertEqual(scenario.s_optimal, 4)
+        self.assertEqual(len(scenario.optimal_path), 5)
+        self.assertEqual(scenario.s_max, 12)
+        self.assertNotIn((1, 2), scenario.optimal_path)
+        self.assertEqual(PuzzleScenario('old', 'Old', '', 4, 6, pieces).s_optimal, 4)
+
+        pieces_without_obstacles = [(3, 0, 0, 'H')]
+        steps, _, _ = find_optimal_winning_path(4, pieces_without_obstacles)
+        self.assertEqual(steps, 3)
+
+    def test_static_minimum_respects_cyclic_capture_rules(self) -> None:
+        for enemy, expected in [('A', 2), ('H', 3), ('E', 3)]:
+            with self.subTest(enemy=enemy):
+                steps, path, _ = find_optimal_winning_path(
+                    3, [(2, 0, 0, 'H'), (1, 1, 1, enemy)])
+                self.assertEqual(steps, expected)
+                self.assertEqual((1, 1) in path, enemy == 'A')
+
+    def test_unreachable_corner_does_not_fall_back_to_six_steps(self) -> None:
+        scenario = PuzzleScenario.from_dict(dict(
+            id='blocked', board_size=3,
+            pieces=[(2, 0, 0, 'H'), (0, 2, 1, 'E')]))
+        self.assertIsNone(scenario.s_optimal)
+        self.assertEqual(scenario.optimal_path, [])
+        self.assertEqual(scenario.step_summary, 'No route (fixed enemies)')
+
+    def test_minimum_selects_best_player_piece(self) -> None:
+        steps, path, piece = find_optimal_winning_path(
+            6, [(5, 0, 0, 'H'), (2, 3, 0, 'E')])
+        self.assertEqual(steps, 2)
+        self.assertEqual(piece, (2, 3, 'E'))
+        self.assertEqual(path[0], (2, 3))
+        self.assertEqual(path[-1], (0, 5))
 
     def test_random_winnable_generator(self) -> None:
         for _ in range(3):

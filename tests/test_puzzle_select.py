@@ -4,7 +4,7 @@ from threading import Thread, get_ident
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
-from puzzle_logic import PRECONFIGURED_STAGES_6X6
+from puzzle_logic import PRECONFIGURED_STAGES_6X6, PuzzleScenario
 from views.puzzle_select_view import PuzzleSelectView, _generate_random_challenges
 
 
@@ -148,6 +148,19 @@ class TestPuzzleSelect(unittest.TestCase):
         config = self.app.start_puzzle.call_args.args[0]
         self.assertEqual(config['p1_name'], 'Guest_1234')
         self.assertNotIn('is_guest_1', config)
+
+    def test_stage_without_route_is_not_started(self):
+        view = self.make_view()
+        puzzle = PuzzleScenario.from_dict(dict(
+            id='blocked', board_size=3,
+            pieces=[(2, 0, 0, 'H'), (0, 2, 1, 'E')]))
+        view.selected_puzzle_id = puzzle.id
+        view.card_widgets = {puzzle.id: {'puzzle': puzzle}}
+        view._update_sidebar()
+        view.btn_play.config.assert_called_with(state='disabled')
+        self.assertIn('No route', view.lbl_selected_stats.config.call_args.kwargs['text'])
+        view._start_selected_stage()
+        self.app.start_puzzle.assert_not_called()
 
     def test_generation_failure_is_visible_and_allows_retry(self):
         view = self.make_view()

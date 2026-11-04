@@ -74,6 +74,22 @@ class TestStageEditor(unittest.TestCase):
         self.assertEqual(solve.call_count, 2)
         self.assertEqual(save.call_args.args[0]['s_optimal'], 5)
 
+    def test_editor_checks_static_route_without_requiring_forced_win(self):
+        editor = self.make_editor()
+        editor.board_size = 3
+        editor.placed_pieces = {(2, 0): (0, 'H'), (0, 1): (1, 'E')}
+        self.assertTrue(editor._verify_winnability(silent=True))
+        self.assertEqual(editor.last_verification['s_optimal'], 2)
+        self.assertIn('fixed enemies', editor.lbl_verify_detail.config.call_args.kwargs['text'])
+
+    def test_editor_rejects_target_blocked_by_uncapturable_piece(self):
+        editor = self.make_editor()
+        editor.board_size = 3
+        editor.placed_pieces = {(2, 0): (0, 'H'), (0, 2): (1, 'E')}
+        self.assertFalse(editor._verify_winnability(silent=True))
+        self.assertFalse(editor.last_verification['winnable'])
+        self.assertIn('NO ROUTE', editor.lbl_verify_status.config.call_args.kwargs['text'])
+
 
 if __name__ == '__main__':
     unittest.main()

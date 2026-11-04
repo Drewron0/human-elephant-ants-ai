@@ -180,14 +180,27 @@ def solve_adversarial_optimal_path(board_size: int, pieces: List[Tuple[int, int,
 
 def find_optimal_winning_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
                               target_coord: Optional[Tuple[int, int]] = None) -> Tuple[Optional[int], List[Tuple[int, int]], Optional[Tuple[int, int, str]]]:
-    """Compatibility entry point. Unknown positions never fall back to a static proof."""
-    return solve_adversarial_optimal_path(board_size, pieces, target_coord)
+    """Shortest piece route through the starting board with all other pieces fixed.
+
+    Prey can be captured; friendly pieces, predators and equal suits block entry.
+    This is a static minimum, not a forced-win proof against a moving defender.
+    """
+    target = target_coord or (0, board_size - 1)
+    best_steps, best_path, best_piece = None, [], None
+    for r, c, owner, pt in pieces:
+        if owner != 0:
+            continue
+        steps, path = bfs_safe_path(board_size, pieces, (r, c), target, pt,
+                                    avoid_predators=False)
+        if steps is not None and (best_steps is None or steps < best_steps):
+            best_steps, best_path, best_piece = steps, path, (r, c, pt)
+    return best_steps, best_path, best_piece
 
 
 class PuzzleScenario:
     def __init__(self, id_str: str, title: str, description: str,
-                 board_size: int, s_optimal: int,
-                 pieces: List[Tuple[int, int, int, str]],
+                 board_size: int, s_optimal: Optional[int] = None,
+                 pieces: Optional[List[Tuple[int, int, int, str]]] = None,
                  optimal_path: Optional[List[Tuple[int, int]]] = None,
                  is_custom: bool = False, verification_status: str = 'UNVERIFIED',
                  verification_method: str = ''):
@@ -195,17 +208,23 @@ class PuzzleScenario:
         self.title = title
         self.description = description
         self.board_size = board_size
-        self.s_optimal = s_optimal
-        self.s_max = 3 * s_optimal
-        self.pieces = pieces
-        self.optimal_path = optimal_path or []
+        self.pieces = pieces or []
+        # Stored counts/routes are legacy caches; always derive the baseline from the board.
+        self.s_optimal, self.optimal_path, _ = find_optimal_winning_path(board_size, self.pieces)
+        self.s_max = 3 * self.s_optimal if self.s_optimal is not None else 0
         self.is_custom = is_custom
         self.verification_status = verification_status
         self.verification_method = verification_method
 
     @property
     def step_label(self) -> str:
-        return 'Optimal' if self.verification_status == 'VERIFIED' else 'Reference (unverified)'
+        return 'Minimum (fixed enemies)'
+
+    @property
+    def step_summary(self) -> str:
+        if self.s_optimal is None:
+            return 'No route (fixed enemies)'
+        return f'{self.step_label}: {self.s_optimal} steps'
 
     def create_initial_state(self) -> GameState:
         state = GameState(board_size=self.board_size, custom_setup=True)
@@ -234,7 +253,6 @@ class PuzzleScenario:
             title=data.get('title', 'Custom Stage'),
             description=data.get('description', ''),
             board_size=data.get('board_size', 6),
-            s_optimal=data.get('s_optimal', 6),
             pieces=[(p[0], p[1], p[2], p[3]) for p in data.get('pieces', [])],
             optimal_path=data.get('optimal_path', []),
             is_custom=data.get('is_custom', True),
@@ -244,7 +262,7 @@ class PuzzleScenario:
 
 
 # =====================================================================
-# LEGACY PRACTICE STAGES: REFERENCE STEP COUNTS, NOT VERIFIED OPTIMA
+# PRACTICE STAGES: MINIMUM STEP COUNTS ARE CALCULATED FROM THEIR BOARDS
 # =====================================================================
 
 PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
@@ -253,7 +271,6 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 1: Advance Guard',
         description='Coordinate Human and Elephant to advance past dispersed defenders.',
         board_size=6,
-        s_optimal=6,
         pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (2, 4, 1, 'H'), (3, 3, 1, 'A')]
     ),
     'stage_6x6_02': PuzzleScenario(
@@ -261,7 +278,6 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 2: Flank Escort',
         description='Ant screens against AI Elephant while Human heads toward the corner.',
         board_size=6,
-        s_optimal=5,
         pieces=[(5, 0, 0, 'H'), (4, 0, 0, 'A'), (2, 3, 1, 'A'), (4, 5, 1, 'E')]
     ),
     'stage_6x6_03': PuzzleScenario(
@@ -269,7 +285,6 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 3: The Pincer',
         description='Dual-front pressure with Human and Ant forcing enemy sentries to retreat.',
         board_size=6,
-        s_optimal=5,
         pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'A'), (0, 3, 1, 'E'), (1, 4, 1, 'A')]
     ),
     'stage_6x6_04': PuzzleScenario(
@@ -277,7 +292,6 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 4: Sentry Gate',
         description='Heavy Elephants defend perimeter. Use Elephant escort through the gap.',
         board_size=6,
-        s_optimal=7,
         pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 0, 0, 'A'), (1, 4, 1, 'E'), (2, 3, 1, 'H'), (3, 2, 1, 'A')]
     ),
     'stage_6x6_05': PuzzleScenario(
@@ -285,7 +299,6 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 5: Crossfire Defense',
         description='Ant maneuvers around central Elephant threat to pierce defensive lines.',
         board_size=6,
-        s_optimal=6,
         pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'A'), (3, 2, 1, 'E'), (2, 4, 1, 'H')]
     ),
     'stage_6x6_06': PuzzleScenario(
@@ -293,7 +306,6 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 6: The Chokepoint',
         description='Elephant escort anchors the center while advancing toward objective.',
         board_size=6,
-        s_optimal=8,
         pieces=[(5, 0, 0, 'H'), (4, 1, 0, 'E'), (2, 2, 1, 'E'), (2, 4, 1, 'A')]
     ),
     'stage_6x6_07': PuzzleScenario(
@@ -301,7 +313,6 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 7: The Ridge',
         description='Elephant pushes through outer corridor to bypass layered barricade.',
         board_size=6,
-        s_optimal=5,
         pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 1, 0, 'A'), (1, 3, 1, 'E'), (2, 4, 1, 'H'), (0, 3, 1, 'A')]
     ),
     'stage_6x6_08': PuzzleScenario(
@@ -309,7 +320,6 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 8: Patrol Infiltration',
         description='Elephant squad threads between patrol zones along the edge.',
         board_size=6,
-        s_optimal=7,
         pieces=[(5, 0, 0, 'H'), (4, 0, 0, 'E'), (5, 2, 0, 'A'), (2, 2, 1, 'E'), (1, 4, 1, 'H'), (3, 4, 1, 'A')]
     ),
     'stage_6x6_09': PuzzleScenario(
@@ -317,7 +327,6 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 9: Corridor Sweep',
         description='Double defender line blocks diagonal. Navigate around outer perimeter.',
         board_size=6,
-        s_optimal=6,
         pieces=[(5, 0, 0, 'H'), (4, 1, 0, 'E'), (5, 2, 0, 'A'), (1, 4, 1, 'E'), (3, 3, 1, 'A'), (2, 5, 1, 'H')]
     ),
     'stage_6x6_10': PuzzleScenario(
@@ -325,7 +334,6 @@ PRECONFIGURED_STAGES_6X6: Dict[str, PuzzleScenario] = {
         title='Stage 10: The Citadel',
         description='Full multi-piece tactical engagement demanding optimal piece synergy.',
         board_size=6,
-        s_optimal=6,
         pieces=[(5, 0, 0, 'H'), (5, 1, 0, 'E'), (4, 0, 0, 'A'), (3, 3, 1, 'E'), (2, 3, 1, 'E'), (1, 4, 1, 'E'), (2, 4, 1, 'A'), (3, 1, 1, 'H')]
     )
 }
@@ -337,7 +345,6 @@ PRECONFIGURED_STAGES_9X9: Dict[str, PuzzleScenario] = {
         title='Tactical Benchmark (9x9)',
         description='Tactical engagement. AI acts as optimal defender.',
         board_size=9,
-        s_optimal=8,
         pieces=[(8, 0, 0, 'H'), (8, 1, 0, 'E'), (7, 0, 0, 'A'), (2, 2, 1, 'A'), (2, 5, 1, 'E'), (4, 3, 1, 'E'), (6, 6, 1, 'H')]
     ),
     'p12_labyrinth': PuzzleScenario(
@@ -345,7 +352,6 @@ PRECONFIGURED_STAGES_9X9: Dict[str, PuzzleScenario] = {
         title='Grand Labyrinth (9x9)',
         description='Extended defense perimeter requiring cooperative piece maneuvering.',
         board_size=9,
-        s_optimal=10,
         pieces=[(8, 0, 0, 'H'), (8, 2, 0, 'E'), (7, 0, 0, 'A'), (8, 3, 1, 'A'), (3, 5, 1, 'E'), (5, 2, 1, 'E')]
     )
 }
@@ -422,7 +428,7 @@ class PuzzleSession:
         self.ai_telemetry_history: List[Dict[str, Any]] = []
 
     @property
-    def s_optimal(self) -> int:
+    def s_optimal(self) -> Optional[int]:
         return self.scenario.s_optimal
 
     @property
@@ -431,7 +437,7 @@ class PuzzleSession:
 
     @property
     def delay_margin(self) -> int:
-        return max(0, self.current_attempt_steps - self.s_optimal)
+        return max(0, self.current_attempt_steps - self.s_optimal) if self.s_optimal is not None else 0
 
     def record_player_step(self) -> None:
         self.current_attempt_steps += 1
@@ -487,6 +493,11 @@ class PuzzleSession:
         if state.winner == 1:
             self.is_neutralized = True
             self.neutralization_reason = "AI reached home corner"
+            return 'NEUTRALIZED'
+
+        if self.s_optimal is None:
+            self.is_neutralized = True
+            self.neutralization_reason = 'No legal route with fixed enemies'
             return 'NEUTRALIZED'
 
         # Neutralization step limit check
