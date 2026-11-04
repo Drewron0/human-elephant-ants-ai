@@ -5,46 +5,47 @@ from ui_theme import THEME, FONT_NAME, ButtonSecondary
 
 class TutorialView(tk.Frame):
     def __init__(self, parent, app):
-        super().__init__(parent, bg=THEME['bg'])
+        super().__init__(parent, bg=THEME["bg"])
         self.app = app
         self._build_ui()
 
     def _build_ui(self):
-        container = tk.Frame(self, bg=THEME['bg'])
+        container = tk.Frame(self, bg=THEME["bg"])
         container.pack(fill=tk.BOTH, expand=True, padx=40, pady=20)
 
         # Fixed Top Header with Back to Hub Button
-        header = tk.Frame(container, bg=THEME['bg'])
+        header = tk.Frame(container, bg=THEME["bg"])
         header.pack(fill=tk.X, pady=(0, 14))
 
         tk.Label(
             header,
             text="Game Rules and How to Play",
             font=(FONT_NAME, 18, "bold"),
-            bg=THEME['bg'],
-            fg=THEME['text']
+            bg=THEME["bg"],
+            fg=THEME["text"],
         ).pack(side=tk.LEFT)
 
-        ButtonSecondary(header, text="Back to Main Menu", command=lambda: self.app.show_view('menu')).pack(side=tk.RIGHT)
+        ButtonSecondary(
+            header, text="Back to Main Menu", command=lambda: self.app.show_view("menu")
+        ).pack(side=tk.RIGHT)
 
         # Scrollable content area so it never clips or overflows
         scroll_card = tk.Frame(
             container,
-            bg=THEME['surface'],
+            bg=THEME["surface"],
             bd=1,
             relief=tk.SOLID,
-            highlightbackground=THEME['border'],
-            highlightthickness=1
+            highlightbackground=THEME["border"],
+            highlightthickness=1,
         )
         scroll_card.pack(fill=tk.BOTH, expand=True)
 
-        canvas = tk.Canvas(scroll_card, bg=THEME['surface'], highlightthickness=0)
+        canvas = tk.Canvas(scroll_card, bg=THEME["surface"], highlightthickness=0)
         scrollbar = ttk.Scrollbar(scroll_card, orient=tk.VERTICAL, command=canvas.yview)
-        content_frame = tk.Frame(canvas, bg=THEME['surface'], padx=24, pady=18)
+        content_frame = tk.Frame(canvas, bg=THEME["surface"], padx=24, pady=18)
 
         content_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
 
         canvas.create_window((0, 0), window=content_frame, anchor="nw")
@@ -93,14 +94,16 @@ class TutorialView(tk.Frame):
             content_frame,
             text=guide_text,
             font=(FONT_NAME, 10),
-            bg=THEME['surface'],
-            fg=THEME['text'],
+            bg=THEME["surface"],
+            fg=THEME["text"],
             justify="left",
-            wraplength=760
+            wraplength=760,
         ).pack(anchor="w")
 
         # Fixed Bottom Footer with second Back to Hub Button
-        footer = tk.Frame(container, bg=THEME['bg'])
+        footer = tk.Frame(container, bg=THEME["bg"])
         footer.pack(fill=tk.X, pady=(12, 0))
 
-        ButtonSecondary(footer, text="Back to Main Menu", command=lambda: self.app.show_view('menu')).pack(side=tk.RIGHT)
+        # ButtonSecondary(
+        #     footer, text="Back to Main Menu", command=lambda: self.app.show_view("menu")
+        # ).pack(side=tk.RIGHT)
