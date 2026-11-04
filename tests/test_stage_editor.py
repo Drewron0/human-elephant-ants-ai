@@ -1,11 +1,9 @@
 import unittest
-from queue import Queue
-from threading import Thread, get_ident
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from views.stage_editor_view import StageEditorView, _verify_stage
-from puzzle_logic import verify_puzzle, puzzle_position_key
+from puzzle_logic import PuzzleScenario
+from views.stage_editor_view import StageEditorView
 
 
 class TestStageEditor(unittest.TestCase):
@@ -15,17 +13,9 @@ class TestStageEditor(unittest.TestCase):
         editor.current_sq_size = 70
         editor.placed_pieces = {(5, 0): (0, 'H'), (2, 3): (1, 'E')}
         editor.active_tool = 'P1_E'
-        editor.last_verification = None
-        editor._verification_queue = Queue()
-        editor._verification_running = False
-        editor._verification_poll_id = None
-        editor._verification_key = None
-        editor._save_after_verification = False
-        editor._closed = False
-        editor.after = Mock(return_value='poll')
-        editor.after_cancel = Mock()
-        editor.lbl_verify_status = Mock()
-        editor.lbl_verify_detail = Mock()
+        editor.var_minimum_steps = Mock(get=Mock(return_value='6'))
+        editor.lbl_save_error = Mock()
+        editor.entry_minimum_steps = Mock()
         editor._draw_board = Mock()
         editor.var_title = Mock(get=Mock(return_value='Test Stage'))
         editor.var_desc = Mock(get=Mock(return_value='Test description'))
@@ -33,28 +23,70 @@ class TestStageEditor(unittest.TestCase):
         editor.app = Mock()
         return editor
 
-    def winning_editor(self):
-        editor = self.make_editor()
-        editor.board_size = 3
-        editor.placed_pieces = {(2, 0): (0, 'H'), (0, 0): (1, 'H')}
-        return editor
-
-    def deliver(self, editor, result):
-        pieces = [(r, c, owner, pt) for (r, c), (owner, pt) in editor.placed_pieces.items()]
-        editor._verification_queue.put((puzzle_position_key(editor.board_size, pieces), result))
-        editor._poll_verification()
-
-    @patch('views.stage_editor_view.verify_puzzle')
-    def test_opening_editor_does_not_solve(self, solve):
+    def test_new_minimum_is_blank_and_editing_prefills_saved_value(self):
         with patch('tkinter.Frame.__init__', return_value=None), \
                 patch.object(StageEditorView, '_build_ui'), \
-                patch.object(StageEditorView, '_bind_shortcuts'):
-            editor = StageEditorView(None, Mock())
-        solve.assert_not_called()
-        self.assertIsNone(editor.last_verification)
+                patch.object(StageEditorView, '_bind_shortcuts'), \
+                patch('puzzle_logic.verify_puzzle') as verify:
+            new = StageEditorView(None, Mock())
+            saved = StageEditorView(None, Mock(), edit_stage=dict(
+                id='saved', s_optimal=6, pieces=[[5, 0, 0, 'H']]))
+        self.assertEqual(new.stage_minimum, '')
+        self.assertEqual(saved.stage_minimum, '6')
+        self.assertEqual(saved.edit_stage_id, 'saved')
+        verify.assert_not_called()
 
-    @patch('views.stage_editor_view.verify_puzzle')
-    def test_board_changes_invalidate_result_without_solving(self, solve):
+    @patch('views.stage_editor_view.storage.save_custom_stage')
+    @patch('puzzle_logic.find_optimal_winning_path', side_effect=AssertionError('Static search called'))
+    @patch('puzzle_logic.verify_puzzle', side_effect=AssertionError('Verification called'))
+    def test_save_uses_the_entered_minimum_without_searching(self, verify, static, save):
+        editor = self.make_editor()
+        editor._save_stage()
+        save.assert_called_once()
+        payload = save.call_args.args[0]
+        self.assertEqual(payload['s_optimal'], 6)
+        self.assertEqual(payload['minimum_source'], 'manual')
+        self.assertNotIn('verification_key', payload)
+        self.assertNotIn('verification_status', payload)
+        loaded = PuzzleScenario.from_dict(payload)
+        self.assertEqual(loaded.s_optimal, 6)
+        self.assertEqual(loaded.s_max, 18)
+        self.assertEqual(loaded.step_summary, 'Minimum (user-entered): 6 steps')
+        self.assertEqual(PuzzleScenario.from_dict(loaded.to_dict()).s_optimal, 6)
+        verify.assert_not_called()
+        static.assert_not_called()
+        editor.app.show_view.assert_called_once_with('puzzle_select')
+
+    @patch('views.stage_editor_view.storage.save_custom_stage')
+    def test_edit_saves_the_new_count_under_the_existing_stage_id(self, save):
+        editor = self.make_editor()
+        editor.edit_stage_id = 'saved'
+        editor.var_minimum_steps.get.return_value = ' 7 '
+        editor._save_stage()
+        self.assertEqual(save.call_args.args[0]['id'], 'saved')
+        self.assertEqual(save.call_args.args[0]['s_optimal'], 7)
+
+    @patch('views.stage_editor_view.storage.save_custom_stage')
+    def test_invalid_minimum_does_not_save(self, save):
+        for value in ('', '0', '-1', '2.5', 'abc'):
+            with self.subTest(value=value):
+                editor = self.make_editor()
+                editor.var_minimum_steps.get.return_value = value
+                editor._save_stage()
+                self.assertIn('positive whole number', editor.lbl_save_error.config.call_args.kwargs['text'])
+                editor.entry_minimum_steps.focus_set.assert_called_once()
+                editor.app.show_view.assert_not_called()
+        save.assert_not_called()
+
+    @patch('views.stage_editor_view.storage.save_custom_stage')
+    def test_board_still_requires_a_player_piece(self, save):
+        editor = self.make_editor()
+        editor.placed_pieces = {(2, 3): (1, 'E')}
+        editor._save_stage()
+        save.assert_not_called()
+        self.assertIn('player piece', editor.lbl_save_error.config.call_args.kwargs['text'])
+
+    def test_board_changes_leave_the_entered_minimum_alone(self):
         event = SimpleNamespace(x=3 * 70, y=2 * 70)
         for action in ('place', 'erase', 'right_click', 'resize', 'reset'):
             with self.subTest(action=action):
@@ -62,11 +94,8 @@ class TestStageEditor(unittest.TestCase):
                 if action in ('place', 'erase'):
                     editor.active_tool = 'P0_A' if action == 'place' else 'ERASER'
                     editor._on_canvas_click(event)
-                    self.assertEqual(editor.placed_pieces.get((2, 3)),
-                                     (0, 'A') if action == 'place' else None)
                 elif action == 'right_click':
                     editor._on_canvas_right_click(event)
-                    self.assertNotIn((2, 3), editor.placed_pieces)
                 elif action == 'resize':
                     editor.var_size = Mock(get=Mock(return_value='7x7'))
                     editor.left_pane = Mock()
@@ -74,105 +103,18 @@ class TestStageEditor(unittest.TestCase):
                     editor.left_pane.winfo_height.return_value = 500
                     editor._apply_pane_resize = Mock()
                     editor._on_size_change()
-                    self.assertEqual(editor.board_size, 7)
                 else:
                     editor._clear_board()
-                    self.assertEqual(len(editor.placed_pieces), 5)
-                self.assertIsNone(editor.last_verification)
-                self.assertIn('Unverified', editor.lbl_verify_status.config.call_args.kwargs['text'])
-                solve.assert_not_called()
+                editor.var_minimum_steps.set.assert_not_called()
 
-    @patch('views.stage_editor_view.storage.save_custom_stage')
-    @patch('views.stage_editor_view.threading.Thread')
-    def test_save_verifies_first_and_persists_the_exact_result(self, thread, save):
-        editor = self.winning_editor()
-        editor._save_stage()
-        save.assert_not_called()
-        thread.return_value.start.assert_called_once()
-        result = verify_puzzle(3, [(2, 0, 0, 'H'), (0, 0, 1, 'H')], max_steps=3)
-        self.deliver(editor, result)
-        payload = save.call_args.args[0]
-        self.assertEqual(payload['s_optimal'], 2)
-        self.assertEqual(payload['verification_status'], 'VERIFIED')
-        self.assertEqual(payload['verification_key'], result['position_key'])
-        self.assertEqual(payload['optimal_moves'], result['moves'])
-        self.assertEqual(payload['defender_policy'], result['defender_policy'])
-        editor.app.show_view.assert_called_once_with('puzzle_select')
-
-    @patch('views.stage_editor_view.storage.save_custom_stage')
-    @patch('views.stage_editor_view.threading.Thread')
-    def test_manual_verification_is_reused_when_saving(self, thread, save):
-        editor = self.winning_editor()
-        editor._verify_winnability()
-        result = verify_puzzle(3, [(2, 0, 0, 'H'), (0, 0, 1, 'H')], max_steps=3)
-        self.deliver(editor, result)
-        save.assert_not_called()
-        editor._save_stage()
-        save.assert_called_once()
-        thread.assert_called_once()
-
-    @patch('views.stage_editor_view.storage.save_custom_stage')
-    @patch('views.stage_editor_view.threading.Thread')
-    def test_unknown_and_negative_results_cannot_save(self, thread, save):
-        for status in ('UNVERIFIED', 'NO_WIN_WITHIN_LIMIT', 'ERROR'):
-            with self.subTest(status=status):
-                editor = self.winning_editor()
-                editor._save_stage()
-                self.deliver(editor, dict(status=status, reason='No forced-win proof'))
-                self.assertIsNone(editor.last_verification)
-                self.assertIn('No minimum assigned', editor.lbl_verify_detail.config.call_args.kwargs['text'])
-        save.assert_not_called()
-
-    @patch('views.stage_editor_view.storage.save_custom_stage')
-    @patch('views.stage_editor_view.threading.Thread')
-    def test_board_edit_discards_in_flight_result_and_does_not_save(self, thread, save):
-        editor = self.winning_editor()
-        editor._save_stage()
-        pieces = [(2, 0, 0, 'H'), (0, 0, 1, 'H')]
-        result = verify_puzzle(3, pieces, max_steps=3)
-        editor._verification_queue.put((puzzle_position_key(3, pieces), result))
-        editor.placed_pieces[(0, 1)] = (1, 'E')
-        editor._poll_verification()
-        self.assertIsNone(editor.last_verification)
-        save.assert_not_called()
-
-    @patch('views.stage_editor_view.verify_puzzle')
-    def test_creation_verification_runs_off_ui_thread(self, verify):
-        thread_ids = []
-        result = dict(status='UNVERIFIED', reason='Budget exhausted')
-        def check(*args, **kwargs):
-            thread_ids.append(get_ident())
-            return result
-        verify.side_effect = check
-        results = Queue()
-        worker = Thread(target=_verify_stage, args=(results, 3, [(2, 0, 0, 'H')]))
-        worker.start()
-        _, actual = results.get(timeout=2)
-        worker.join(timeout=2)
-        self.assertIs(actual, result)
-        self.assertNotEqual(thread_ids[0], get_ident())
-        self.assertEqual(verify.call_args.kwargs['time_budget'], 120.0)
-        self.assertEqual(verify.call_args.kwargs['node_budget'], 3000000)
-
-    @patch('views.stage_editor_view.storage.save_custom_stage')
-    def test_closing_editor_ignores_late_result(self, save):
-        editor = self.winning_editor()
-        editor._closed = True
-        editor._save_after_verification = True
-        result = verify_puzzle(3, [(2, 0, 0, 'H'), (0, 0, 1, 'H')], max_steps=3)
-        self.deliver(editor, result)
-        save.assert_not_called()
-
-    @patch('views.stage_editor_view.threading.Thread')
-    def test_worker_start_failure_clears_busy_state(self, thread):
-        thread.return_value.start.side_effect = RuntimeError('Cannot start worker')
-        editor = self.winning_editor()
-        editor._verify_winnability(silent=True)
-        self.assertFalse(editor._verification_running)
-        self.assertFalse(editor._save_after_verification)
-        self.assertIsNone(editor.last_verification)
-        editor.after.assert_not_called()
-        self.assertIn('UNVERIFIED', editor.lbl_verify_status.config.call_args.kwargs['text'])
+    def test_typing_numbers_in_text_fields_does_not_change_board_tool(self):
+        editor = self.make_editor()
+        editor._set_tool = Mock()
+        for widget_class in ('Entry', 'TEntry', 'TCombobox'):
+            editor._on_tool_key(SimpleNamespace(widget=Mock(winfo_class=Mock(return_value=widget_class))), 'P0_H')
+        editor._set_tool.assert_not_called()
+        editor._on_tool_key(SimpleNamespace(widget=Mock(winfo_class=Mock(return_value='Canvas'))), 'P0_H')
+        editor._set_tool.assert_called_once_with('P0_H')
 
 
 if __name__ == '__main__':

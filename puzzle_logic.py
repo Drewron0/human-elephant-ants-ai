@@ -245,20 +245,21 @@ class PuzzleScenario:
                  is_custom: bool = False, verification_status: str = 'UNVERIFIED',
                  verification_method: str = '', verification_key: str = '',
                  optimal_moves: Optional[List[Any]] = None, move_limit: Optional[int] = None,
-                 defender_policy: Optional[Dict[str, Any]] = None):
+                 defender_policy: Optional[Dict[str, Any]] = None, minimum_source: str = ''):
         self.id = id_str
         self.title = title
         self.description = description
         self.board_size = board_size
         self.pieces = pieces or []
-        verified = (verification_status == 'VERIFIED'
+        verified = (minimum_source != 'manual' and verification_status == 'VERIFIED'
                     and verification_key == puzzle_position_key(board_size, self.pieces)
                     and type(s_optimal) is int and s_optimal >= 0)
-        self.s_optimal = s_optimal if verified else None
+        self.s_optimal = s_optimal if type(s_optimal) is int and s_optimal > 0 else None
+        self.minimum_source = minimum_source
         self.optimal_path = (optimal_path or []) if verified else []
         self.optimal_moves = (optimal_moves or []) if verified else []
         self.defender_policy = (defender_policy or {}) if verified else {}
-        if verified:
+        if self.s_optimal is not None:
             self.s_max = 3 * self.s_optimal
         else:
             self.s_max = move_limit if type(move_limit) is int and move_limit > 0 else 3 * board_size
@@ -269,12 +270,16 @@ class PuzzleScenario:
 
     @property
     def step_label(self) -> str:
+        if self.minimum_source == 'manual':
+            return 'Minimum (user-entered)'
+        if self.is_custom or self.verification_status != 'VERIFIED':
+            return 'Minimum (saved)'
         return 'Minimum (best defense)'
 
     @property
     def step_summary(self) -> str:
         if self.s_optimal is None:
-            return 'Minimum: unverified'
+            return 'Minimum: not set'
         return f'{self.step_label}: {self.s_optimal} steps'
 
     def create_initial_state(self) -> GameState:
@@ -301,6 +306,8 @@ class PuzzleScenario:
         }
         if self.defender_policy:
             data['defender_policy'] = self.defender_policy
+        if self.minimum_source == 'manual':
+            data['minimum_source'] = 'manual'
         return data
 
     @staticmethod
@@ -319,7 +326,8 @@ class PuzzleScenario:
             verification_status=data.get('verification_status', 'UNVERIFIED'),
             verification_method=data.get('verification_method', ''),
             verification_key=data.get('verification_key', ''),
-            move_limit=data.get('s_max')
+            move_limit=data.get('s_max'),
+            minimum_source=data.get('minimum_source', '')
         )
 
 

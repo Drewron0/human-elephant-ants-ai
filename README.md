@@ -26,9 +26,9 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 - Fluid, interactive splitters (`tk.PanedWindow`) allowing users to resize sidebars while the board dynamically scales to fit the container.
 
 ### Tactical Stage Studio & Custom Stage Builder
-- **Custom Puzzle Verification:** Creation/editing runs adversarial Minimax against every legal defensive reply, with iterative horizons to establish the minimum number of player moves needed against best defense. Verification runs in a background thread, with a 120-second/3,000,000-node budget and a 14-player-move horizon. A completed negative search only excludes wins within that horizon; a budget exhaustion is `UNVERIFIED`. Neither result receives a minimum or can be saved as a verified custom stage. Static BFS routes are not accepted as winning proofs.
-- **Stored Minimum Steps:** Verified counts, a sample line of play and a layout fingerprint are saved with each custom stage. Loading uses this result without rerunning a search. A changed layout, legacy BFS result or missing proof shows `Minimum: unverified`; custom stages must be verified in the editor before play. Verified stages use a move limit of three times their proven minimum.
-- **Exact Puzzle Defender:** The default puzzle model uses proven defensive decisions saved during verification. For a position not covered by the saved policy, the same exact solver runs in the background within the remaining player-move limit. Finite-distance decisions are exact; a failure certificate is reused only within its proven horizon. Analysis has the 120-second/3,000,000-node budget. If it is incomplete, the AI pauses with Retry/Undo/Reset available and never falls back to a shallow or random reply. Existing stages without a saved policy are analyzed lazily; re-verifying/saving preloads reusable decisions. Deliberately weaker practice baselines remain explicit choices, and benchmark agents are unchanged.
+- **Author-entered Minimum Steps:** The custom stage editor requires a positive whole-number minimum entered by the author. New stages start with a blank field; editing prefills the saved value. Saving and loading preserve this number exactly, without a search, verification button or proof prerequisite. The move limit remains three times the entered minimum.
+- **Saved Stage Counts:** User-entered values are labeled `Minimum (user-entered)`, not claimed as algorithmically verified. Older stored counts remain available and editable. A stage without a valid count prompts the author to enter one before play. Saving an edit replaces obsolete automatic-verification metadata with the manual value.
+- **Exact Puzzle Defender:** AI move selection remains separate from the manual minimum and cannot change it. The default model analyzes defensive replies exactly within the remaining game move limit, using existing valid cached replies when available. Analysis has the 120-second/3,000,000-node budget. If it is incomplete, the AI pauses with Retry/Undo/Reset available and never falls back to a shallow or random reply. Deliberately weaker practice baselines remain explicit choices, and benchmark agents are unchanged.
 - **Recoverable Mistakes:** Losing the puzzle leaves its board and move history available for Undo or Reset. Each successful undo action is counted, including when it restores both the player's move and the AI's reply. Losing a predicted winning strategy does not immediately end play.
 - **Custom Stages Only:** The puzzle menu loads stages created and saved by users. Create, edit, delete and play custom stages from one catalog with board thumbnails, AI selection and per-stage records. An empty catalog prompts the user to create a stage; Play stays disabled. Built-in presets, category tabs and random challenges have been removed, including their worker/cache/polling code and launch fallbacks.
 - **Spoiler Prevention Toggle:** Toggle search metrics display before playing to prevent move spoilers.
@@ -63,7 +63,7 @@ AFL2/
     |-- menu_view.py         # Main navigation hub
     |-- puzzle_game_view.py  # Puzzle gameplay view with real-time defender AI
     |-- puzzle_select_view.py# Stage selector with thumbnails, AI picker, and leaderboards
-    |-- stage_editor_view.py # Stage editor with creation-time Minimax verification
+    |-- stage_editor_view.py # Stage editor with author-entered minimum steps
     `-- tutorial_view.py     # How-to-play interactive manual
 ```
 
@@ -103,8 +103,8 @@ AFL2/
 python main.py
 ```
 
-### Run Stage Winnability Verification
-Reports exact bounded verification for saved custom stages and 20 generated benchmark puzzles. Exit codes: 0 = verified, 1 = no forced win within the horizon, 2 = verification budget exhausted. To check only benchmark puzzles:
+### Optional Offline Search Diagnostics
+This developer utility reports bounded search results without changing saved author-entered minimums. It is not part of creating, saving or loading a stage. Exit codes: 0 = verified, 1 = no forced win within the horizon, 2 = verification budget exhausted. To check only benchmark puzzles:
 ```bash
 python verify_stages.py
 python verify_stages.py --generated-only

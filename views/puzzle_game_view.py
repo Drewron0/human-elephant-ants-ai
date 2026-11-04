@@ -733,7 +733,7 @@ class PuzzleGameView(tk.Frame):
             "1. Objective:\n"
             f"   Navigate your piece to the opponent's star corner within Move Limit={self.session.s_max} moves.\n"
             f"   {self.scenario.step_summary}.\n"
-            "   A verified minimum considers the defender's best legal replies.\n"
+            "   The minimum step count is supplied by the stage author.\n"
             "   After a loss, Undo or Reset remains available. Each undo action is counted.\n\n"
             "2. Combat Hierarchy:\n"
             "   Elephant (E) defeats Human (H)\n"

@@ -1,5 +1,7 @@
 # Verify custom puzzles before saving — 2026-11-04
 
+Historical authoring workflow: replaced by `manual-puzzle-minimum.md`. The editor no longer verifies stages or calculates minimum steps.
+
 ## Problem
 Static BFS can report a route that a moving defender immediately defeats. The supplied 6x6 board has a six-move static route, but the Ant's first move a2-b3 permits Human c4xb3. Adversarial verification finds no forced win within six player moves.
 

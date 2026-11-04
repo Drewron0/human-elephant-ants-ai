@@ -50,17 +50,17 @@ class TestGameLogic(unittest.TestCase):
 
 
 class TestPuzzleLogic(unittest.TestCase):
-    # Tests minimum-step verification and the benchmark puzzle generator
-    def test_minimum_counts_obstacle_detour_and_ignores_stale_saved_count(self) -> None:
+    # Tests author-entered minimums and independent search utilities.
+    def test_saved_minimum_is_preserved_instead_of_recalculated(self) -> None:
         pieces = [(3, 0, 0, 'H')] + [(1, c, 1, 'E') for c in range(3)]
         scenario = PuzzleScenario.from_dict(dict(
             id='detour', board_size=4, pieces=pieces, s_optimal=6,
             optimal_path=[(3, 0), (0, 3)]))
         # Three diagonal moves would have to pass through blocked (1, 2).
-        self.assertIsNone(scenario.s_optimal)
+        self.assertEqual(scenario.s_optimal, 6)
         self.assertEqual(scenario.optimal_path, [])
-        self.assertEqual(scenario.s_max, 12)
-        self.assertIsNone(PuzzleScenario('old', 'Old', '', 4, 6, pieces).s_optimal)
+        self.assertEqual(scenario.s_max, 18)
+        self.assertEqual(PuzzleScenario('old', 'Old', '', 4, 6, pieces).s_optimal, 6)
         static_steps, static_path, _ = find_optimal_winning_path(4, pieces)
         self.assertEqual(static_steps, 4)
         self.assertNotIn((1, 2), static_path)
@@ -83,7 +83,7 @@ class TestPuzzleLogic(unittest.TestCase):
             pieces=[(2, 0, 0, 'H'), (0, 2, 1, 'E')]))
         self.assertIsNone(scenario.s_optimal)
         self.assertEqual(scenario.optimal_path, [])
-        self.assertEqual(scenario.step_summary, 'Minimum: unverified')
+        self.assertEqual(scenario.step_summary, 'Minimum: not set')
 
     def test_verified_minimum_is_loaded_without_recalculating(self) -> None:
         from unittest.mock import patch
@@ -108,7 +108,7 @@ class TestPuzzleLogic(unittest.TestCase):
 
         payload['pieces'] = [(2, 0, 0, 'H'), (0, 1, 1, 'E')]
         stale = PuzzleScenario.from_dict(payload)
-        self.assertIsNone(stale.s_optimal)
+        self.assertEqual(stale.s_optimal, 2)
         self.assertEqual(stale.verification_status, 'UNVERIFIED')
         self.assertEqual(stale.optimal_path, [])
 

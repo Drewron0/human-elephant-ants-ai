@@ -220,7 +220,7 @@ class PuzzleSelectView(tk.Frame):
             lbl_title = tk.Label(card, text=puzzle.title, font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=THEME['text'], wraplength=130, justify="center")
             lbl_title.pack(anchor="center", fill=tk.X)
 
-            minimum = f"Min: {puzzle.s_optimal} steps\nBest defense verified" if puzzle.s_optimal is not None else "Minimum unverified"
+            minimum = f"Min: {puzzle.s_optimal} steps" if puzzle.s_optimal is not None else "Minimum not set"
             lbl_sub = tk.Label(card, text=f"{puzzle.board_size}x{puzzle.board_size} | {minimum}", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'], justify="center")
             lbl_sub.pack(anchor="center", fill=tk.X, pady=(2, 0))
 
@@ -270,7 +270,7 @@ class PuzzleSelectView(tk.Frame):
         self.lbl_selected_desc.config(text=puzzle.description or "Tactical puzzle scenario.")
         details = f"{puzzle.board_size}x{puzzle.board_size} Board | {puzzle.step_summary}\nMove Limit: {puzzle.s_max}"
         if puzzle.s_optimal is None:
-            details += '\nEdit and verify this stage before playing.'
+            details += '\nEdit this stage to enter its minimum steps.'
         self.lbl_selected_stats.config(text=details)
         self.btn_play.config(state='disabled' if puzzle.s_optimal is None else 'normal')
 

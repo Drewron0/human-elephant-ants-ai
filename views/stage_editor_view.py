@@ -1,33 +1,18 @@
 import tkinter as tk
 from tkinter import ttk
-from typing import Dict, Any, List, Tuple, Optional
-import threading
-from queue import Queue, Empty
+from typing import Dict, Any, Tuple, Optional
 
 from ui_theme import (
     THEME, FONT_NAME, ButtonPrimary, ButtonSecondary, ButtonDanger,
     ThemedModal, draw_star
 )
 import storage
-from puzzle_logic import verify_puzzle, puzzle_position_key
-
-
-VERIFICATION_MAX_STEPS = 14
-
-
-def _verify_stage(results, board_size, pieces):
-    try:
-        result = verify_puzzle(board_size, pieces, max_steps=VERIFICATION_MAX_STEPS,
-                               time_budget=120.0, node_budget=3000000)
-    except Exception as exc:
-        result = {'status': 'ERROR', 'reason': str(exc)}
-    results.put((puzzle_position_key(board_size, pieces), result))
 
 
 class StageEditorView(tk.Frame):
     """
     Apple-styled Stage Editor providing full CRUD for custom Chess-Sut puzzle stages.
-    Includes visual board editor, piece palette, and manual winnability verification.
+    Includes a visual board editor, piece palette and author-entered minimum steps.
     """
     def __init__(self, parent, app, edit_stage: Optional[Any] = None, stage: Optional[Any] = None, stage_to_edit: Optional[Any] = None, **kwargs):
         super().__init__(parent, bg=THEME['bg'])
@@ -45,6 +30,8 @@ class StageEditorView(tk.Frame):
         self.board_size = stage_dict.get('board_size', 6) if stage_dict else 6
         self.stage_title = stage_dict.get('title', 'My Custom Stage') if stage_dict else 'My Custom Stage'
         self.stage_desc = stage_dict.get('description', '') if stage_dict else 'Custom tactical puzzle scenario.'
+        saved_minimum = stage_dict.get('s_optimal') if stage_dict else None
+        self.stage_minimum = str(saved_minimum) if saved_minimum is not None else ''
 
         # Placed pieces: dict mapping (r, c) -> (owner, p_type)
         self.placed_pieces: Dict[Tuple[int, int], Tuple[int, str]] = {}
@@ -62,13 +49,6 @@ class StageEditorView(tk.Frame):
 
         # Active palette selection tool
         self.active_tool: str = 'P1_E'
-        self.last_verification: Optional[Dict[str, Any]] = None
-        self._verification_queue = Queue()
-        self._verification_running = False
-        self._verification_poll_id = None
-        self._verification_key = None
-        self._save_after_verification = False
-        self._closed = False
         self.current_sq_size: int = 70
         self._resize_job = None
 
@@ -76,14 +56,14 @@ class StageEditorView(tk.Frame):
         self._bind_shortcuts()
 
     def _bind_shortcuts(self):
-        self.app.bind("<Key-1>", lambda e: self._set_tool('P0_H'))
-        self.app.bind("<Key-2>", lambda e: self._set_tool('P0_E'))
-        self.app.bind("<Key-3>", lambda e: self._set_tool('P0_A'))
-        self.app.bind("<Key-4>", lambda e: self._set_tool('P1_E'))
-        self.app.bind("<Key-5>", lambda e: self._set_tool('P1_H'))
-        self.app.bind("<Key-6>", lambda e: self._set_tool('P1_A'))
-        self.app.bind("<Key-7>", lambda e: self._set_tool('ERASER'))
-        self.app.bind("<Key-0>", lambda e: self._set_tool('ERASER'))
+        tools = {'1': 'P0_H', '2': 'P0_E', '3': 'P0_A', '4': 'P1_E',
+                 '5': 'P1_H', '6': 'P1_A', '7': 'ERASER', '0': 'ERASER'}
+        for key, tool in tools.items():
+            self.app.bind(f'<Key-{key}>', lambda e, selected=tool: self._on_tool_key(e, selected))
+
+    def _on_tool_key(self, event, tool):
+        if event.widget.winfo_class() not in ('Entry', 'TEntry', 'TCombobox'):
+            self._set_tool(tool)
 
     def _unbind_shortcuts(self):
         for k in ["1", "2", "3", "4", "5", "6", "7", "0"]:
@@ -144,6 +124,13 @@ class StageEditorView(tk.Frame):
         self.var_desc = tk.StringVar(value=self.stage_desc)
         tk.Entry(content, textvariable=self.var_desc, font=(FONT_NAME, 9), bg=THEME['surface_light'], fg=THEME['text'], insertbackground=THEME['text'], bd=0).pack(fill=tk.X, pady=(0, 10))
 
+        tk.Label(content, text="Minimum Steps:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 2))
+        self.var_minimum_steps = tk.StringVar(value=self.stage_minimum)
+        self.entry_minimum_steps = tk.Entry(content, textvariable=self.var_minimum_steps, font=(FONT_NAME, 9), bg=THEME['surface_light'], fg=THEME['text'], insertbackground=THEME['text'], bd=0)
+        self.entry_minimum_steps.pack(fill=tk.X, pady=(0, 3))
+        self.lbl_save_error = tk.Label(content, text="", font=(FONT_NAME, 8), bg=THEME['surface'], fg=THEME['danger'], wraplength=270, justify="left")
+        self.lbl_save_error.pack(anchor="w", pady=(0, 8))
+
         # Board Size Selection
         tk.Label(content, text="Board Size:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(0, 2))
         self.var_size = tk.StringVar(value=f"{self.board_size}x{self.board_size}")
@@ -184,18 +171,6 @@ class StageEditorView(tk.Frame):
             )
             btn.pack(fill=tk.X, pady=2)
             self.palette_buttons[code] = btn
-
-        # Verification Box
-        self.box_verification = tk.Frame(content, bg=THEME['surface_card'], padx=10, pady=8, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
-        self.box_verification.pack(fill=tk.X, pady=(0, 12))
-
-        self.lbl_verify_status = tk.Label(self.box_verification, text="Winnability: Unverified", font=(FONT_NAME, 9, "bold"), bg=THEME['surface_card'], fg=THEME['warning'])
-        self.lbl_verify_status.pack(anchor="w")
-
-        self.lbl_verify_detail = tk.Label(self.box_verification, text="Verify the initial position against best defense before saving.", font=(FONT_NAME, 8), bg=THEME['surface_card'], fg=THEME['text_muted'], wraplength=270, justify="left")
-        self.lbl_verify_detail.pack(anchor="w", pady=(2, 4))
-
-        ButtonSecondary(self.box_verification, text="Verify Winnability (Minimax)", command=self._verify_winnability).pack(anchor="w")
 
         # Bottom Actions
         ButtonPrimary(content, text="Save Stage", command=self._save_stage).pack(fill=tk.X, pady=(0, 4))
@@ -267,7 +242,6 @@ class StageEditorView(tk.Frame):
             w = max(440, self.left_pane.winfo_width())
             h = max(440, self.left_pane.winfo_height())
             self._apply_pane_resize(w, h)
-            self._invalidate_verification()
 
     def _draw_board(self):
         self.canvas.delete("all")
@@ -315,7 +289,6 @@ class StageEditorView(tk.Frame):
         if (r, c) in self.placed_pieces:
             del self.placed_pieces[(r, c)]
             self._draw_board()
-            self._invalidate_verification()
 
     def _on_canvas_click(self, event):
         size = self.board_size
@@ -335,7 +308,6 @@ class StageEditorView(tk.Frame):
             self.placed_pieces[(r, c)] = (owner, pt)
 
         self._draw_board()
-        self._invalidate_verification()
 
     def _clear_board(self):
         self.placed_pieces.clear()
@@ -346,100 +318,33 @@ class StageEditorView(tk.Frame):
         self.placed_pieces[(2, 3)] = (1, 'E')
         self.placed_pieces[(1, 4)] = (1, 'H')
         self._draw_board()
-        self._invalidate_verification()
-
-    def _invalidate_verification(self):
-        self.last_verification = None
-        self._save_after_verification = False
-        self.lbl_verify_status.config(text="Winnability: Unverified", fg=THEME['warning'])
-        self.lbl_verify_detail.config(text="Board changed. Verify the new position before saving.")
-
-    def _verify_winnability(self, silent: bool = False):
-        pieces_list = [(r, c, owner, pt) for (r, c), (owner, pt) in self.placed_pieces.items()]
-        if not any(p[2] == 0 for p in pieces_list):
-            self.lbl_verify_status.config(text="Status: No Player Pieces", fg=THEME['danger'])
-            self.lbl_verify_detail.config(text="Place at least one green Player piece on the board.")
-            return
-        key = puzzle_position_key(self.board_size, pieces_list)
-        if self._verification_running:
-            if key == self._verification_key:
-                self._save_after_verification |= silent
-            else:
-                self.lbl_verify_detail.config(text="The previous layout is still being checked. Verify this layout again when it finishes.")
-            return
-        self.last_verification = None
-        self._verification_running = True
-        self._verification_key = key
-        self._save_after_verification = silent
-        self.lbl_verify_status.config(text="Status: CHECKING BEST DEFENSE", fg=THEME['accent'])
-        self.lbl_verify_detail.config(text=f"Checking up to {VERIFICATION_MAX_STEPS} player moves (up to 2 minutes). Only a proven minimum can be saved.")
-        try:
-            threading.Thread(target=_verify_stage,
-                             args=(self._verification_queue, self.board_size, pieces_list),
-                             daemon=True).start()
-        except RuntimeError as exc:
-            self._verification_running = False
-            self._save_after_verification = False
-            self.lbl_verify_status.config(text="Status: UNVERIFIED", fg=THEME['warning'])
-            self.lbl_verify_detail.config(text=str(exc))
-            return
-        self._verification_poll_id = self.after(100, self._poll_verification)
-
-    def _poll_verification(self):
-        self._verification_poll_id = None
-        if self._closed:
-            return
-        try:
-            key, result = self._verification_queue.get_nowait()
-        except Empty:
-            self._verification_poll_id = self.after(100, self._poll_verification)
-            return
-        self._verification_running = False
-        save_after = self._save_after_verification
-        self._save_after_verification = False
-        pieces = [(r, c, owner, pt) for (r, c), (owner, pt) in self.placed_pieces.items()]
-        if key != puzzle_position_key(self.board_size, pieces):
-            self._invalidate_verification()
-            return
-        if result['status'] == 'VERIFIED':
-            self.last_verification = result
-            steps = result['steps']
-            self.lbl_verify_status.config(text=f"Status: WINNABLE ({steps} Steps)", fg=THEME['success'])
-            self.lbl_verify_detail.config(text=f"Initial position wins against every legal defense. Minimum: {steps} player moves. Move limit: {3 * steps}.")
-            if save_after:
-                self._save_stage()
-        else:
-            self.last_verification = None
-            status = 'NO WIN WITHIN HORIZON' if result['status'] == 'NO_WIN_WITHIN_LIMIT' else 'UNVERIFIED'
-            self.lbl_verify_status.config(text=f"Status: {status}", fg=THEME['warning'])
-            self.lbl_verify_detail.config(text=f"Not saved. {result['reason']}. No minimum assigned.")
 
     def _save_stage(self):
+        try:
+            minimum = int(self.var_minimum_steps.get().strip())
+            if minimum <= 0:
+                raise ValueError
+        except ValueError:
+            self.lbl_save_error.config(text="Enter a positive whole number for Minimum Steps.")
+            self.entry_minimum_steps.focus_set()
+            return
         pieces_list = [(r, c, owner, pt) for (r, c), (owner, pt) in self.placed_pieces.items()]
-        if (not self.last_verification
-                or self.last_verification.get('status') != 'VERIFIED'
-                or self.last_verification.get('position_key') != puzzle_position_key(self.board_size, pieces_list)):
-            self._verify_winnability(silent=True)
+        if not any(p[2] == 0 for p in pieces_list):
+            self.lbl_save_error.config(text="Place at least one player piece on the board.")
             return
 
+        self.lbl_save_error.config(text="")
         title = self.var_title.get().strip() or "Custom Stage"
         desc = self.var_desc.get().strip() or "Custom tactical scenario."
-        s_opt = self.last_verification['steps']
-        path = self.last_verification['path']
 
         payload = {
             'id': self.edit_stage_id,
             'title': title,
             'description': desc,
             'board_size': self.board_size,
-            's_optimal': s_opt,
+            's_optimal': minimum,
+            'minimum_source': 'manual',
             'pieces': pieces_list,
-            'optimal_path': path,
-            'optimal_moves': self.last_verification['moves'],
-            'defender_policy': self.last_verification.get('defender_policy', {}),
-            'verification_status': 'VERIFIED',
-            'verification_method': self.last_verification['method'],
-            'verification_key': self.last_verification['position_key'],
             'is_custom': True
         }
 
@@ -461,10 +366,6 @@ class StageEditorView(tk.Frame):
         ButtonDanger(modal.footer, text="Delete", command=confirm).pack(side=tk.RIGHT)
 
     def _cleanup(self):
-        self._closed = True
-        if self._verification_poll_id is not None:
-            self.after_cancel(self._verification_poll_id)
-            self._verification_poll_id = None
         self._unbind_shortcuts()
         if self._resize_job is not None:
             try:

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import storage
-from puzzle_logic import get_all_puzzles, verify_puzzle
+from puzzle_logic import get_all_puzzles
 from views.puzzle_select_view import PuzzleSelectView
 from views.puzzle_game_view import PuzzleGameView
 
@@ -26,11 +26,8 @@ class TestPuzzleSelect(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
         pieces = [(2, 0, 0, 'H'), (0, 0, 1, 'H')]
-        proof = verify_puzzle(3, pieces, max_steps=3)
         self.payload = dict(id='my_stage', title='My Stage', board_size=3, pieces=pieces,
-            s_optimal=proof['steps'], optimal_path=proof['path'], optimal_moves=proof['moves'],
-            verification_status=proof['status'], verification_method=proof['method'],
-            verification_key=proof['position_key'], is_custom=True)
+            s_optimal=6, minimum_source='manual', is_custom=True)
 
     def make_view(self):
         view = object.__new__(PuzzleSelectView)
@@ -79,18 +76,28 @@ class TestPuzzleSelect(unittest.TestCase):
         self.assertEqual(config['search_depth'], 6)
         self.assertEqual(storage.get_last_username(), 'Felix')
 
-    def test_unverified_custom_stage_can_be_edited_but_not_played(self):
+    def test_saved_minimum_can_be_played_without_verification(self):
         storage.save_custom_stage(dict(self.payload, verification_key='stale'))
         view = self.make_view()
         view._populate_grid()
-        view.btn_play.config.assert_called_with(state='disabled')
-        self.assertIn('verify', view.lbl_selected_stats.config.call_args.kwargs['text'])
+        view.btn_play.config.assert_called_with(state='normal')
+        self.assertIn('user-entered', view.lbl_selected_stats.config.call_args.kwargs['text'])
         view._start_selected_stage()
-        self.app.start_puzzle.assert_not_called()
+        self.app.start_puzzle.assert_called_once()
+        self.assertEqual(self.app.start_puzzle.call_args.args[0]['custom_scenario_obj'].s_optimal, 6)
         view._edit_selected_stage()
         self.app.show_view.assert_called_once()
         self.assertEqual(self.app.show_view.call_args.args[0], 'stage_editor')
         self.assertEqual(self.app.show_view.call_args.kwargs['edit_stage']['id'], 'my_stage')
+
+    def test_missing_minimum_requires_input_before_playing(self):
+        storage.save_custom_stage(dict(self.payload, s_optimal=None))
+        view = self.make_view()
+        view._populate_grid()
+        view.btn_play.config.assert_called_with(state='disabled')
+        self.assertIn('enter its minimum', view.lbl_selected_stats.config.call_args.kwargs['text'])
+        view._start_selected_stage()
+        self.app.start_puzzle.assert_not_called()
 
     def test_create_action_opens_the_editor(self):
         self.make_view()._open_stage_editor()
