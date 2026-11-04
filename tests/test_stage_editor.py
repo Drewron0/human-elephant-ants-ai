@@ -150,7 +150,8 @@ class TestStageEditor(unittest.TestCase):
         worker.join(timeout=2)
         self.assertIs(actual, result)
         self.assertNotEqual(thread_ids[0], get_ident())
-        self.assertEqual(verify.call_args.kwargs['time_budget'], 10.0)
+        self.assertEqual(verify.call_args.kwargs['time_budget'], 120.0)
+        self.assertEqual(verify.call_args.kwargs['node_budget'], 3000000)
 
     @patch('views.stage_editor_view.storage.save_custom_stage')
     def test_closing_editor_ignores_late_result(self, save):

@@ -18,7 +18,7 @@ VERIFICATION_MAX_STEPS = 14
 def _verify_stage(results, board_size, pieces):
     try:
         result = verify_puzzle(board_size, pieces, max_steps=VERIFICATION_MAX_STEPS,
-                               time_budget=10.0, node_budget=300000)
+                               time_budget=120.0, node_budget=3000000)
     except Exception as exc:
         result = {'status': 'ERROR', 'reason': str(exc)}
     results.put((puzzle_position_key(board_size, pieces), result))
@@ -372,7 +372,7 @@ class StageEditorView(tk.Frame):
         self._verification_key = key
         self._save_after_verification = silent
         self.lbl_verify_status.config(text="Status: CHECKING BEST DEFENSE", fg=THEME['accent'])
-        self.lbl_verify_detail.config(text=f"Checking up to {VERIFICATION_MAX_STEPS} player moves. Only a proven minimum can be saved.")
+        self.lbl_verify_detail.config(text=f"Checking up to {VERIFICATION_MAX_STEPS} player moves (up to 2 minutes). Only a proven minimum can be saved.")
         try:
             threading.Thread(target=_verify_stage,
                              args=(self._verification_queue, self.board_size, pieces_list),

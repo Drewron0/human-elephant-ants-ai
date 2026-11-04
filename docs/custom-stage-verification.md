@@ -18,5 +18,13 @@ Persist a board-bound verification result; replace the editor's static check; re
 ## Open questions
 None. The latest requirement is a winning strategy from the initial position against moving defenders, superseding the earlier stationary-enemy baseline.
 
+## Larger verification budget — 2026-11-04
+1. Problem: the 10-second/300,000-node creation budget ends too early for complex custom stages.
+2. Success criteria: allow up to 120 seconds and 3,000,000 nodes before reporting an incomplete verification.
+3. Scope: creation/editing verification budgets, progress text, documentation and the existing worker test. Preserve the 14-move horizon and in-game AI budgets.
+4. Constraints: keep background execution and never turn an exhausted budget into a winning proof.
+5. Plan: raise the two limits, update the existing test/documentation, run the suite and commit a reversible checkpoint. A full two-minute dense-board solve is not required to validate this configuration change.
+6. Open questions: none; the user explicitly requested a larger timeout.
+
 ## Validation
 All 58 tests pass. The supplied image is reconstructed in a regression test: static BFS reports six moves, Human c4xb3 refutes that route, and exhaustive bounded verification finds no forced win within six player moves. Hidden Tk checks save a proven stage asynchronously, reload its cached result without searching, keep the UI responsive during dense-board verification, reject its unverified minimum, and recover from a terminal capture through a counted undo. The dense board's true minimum remains unverified within the creation-time budget; no global unwinnability claim is made. Saved user data and layouts are preserved.
