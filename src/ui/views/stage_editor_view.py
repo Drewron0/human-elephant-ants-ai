@@ -4,10 +4,13 @@ import tkinter as tk
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
+from PIL import Image
+
 from config import settings
 from src import storage
-from src.core.game_logic import PIECE_NAMES, Coord
+from src.core.game_logic import Coord
 from src.puzzle.scenario import validate_stage
+from src.ui import art
 from src.ui.board import BoardFrame, BoardLayer
 from src.ui.dialogs import confirm
 from src.ui.fields import Field
@@ -24,7 +27,7 @@ from src.ui.theme import (
     TEAM_COLORS,
     font,
 )
-from src.ui.widgets import PillButton, WrapLabel, field_label, section_title
+from src.ui.widgets import PillButton, ToolButton, WrapLabel, divider, field_label
 
 if TYPE_CHECKING:
     from src.ui.app import GameApp
@@ -33,6 +36,9 @@ SIDEBAR_WIDTH = 360
 MIN_BOARD = 260
 LANDSCAPE_RATIO = 1.12
 PORTRAIT_BOARD_SHARE = 0.55
+TOOL_SIZE = 56
+TOOL_GAP = 4
+PIECE_ORDER = "HEA"
 ERASER = "ERASER"
 TOOL_KEYS = {
     "1": "P0_H",
@@ -87,6 +93,8 @@ class StageEditorView(SceneView):
             variant="primary",
             icon="check",
         ).pack()
+        self.rail = Panel(self, padding=SPACE_S)
+        self._build_rail()
         self.sidebar = Panel(self)
         scroll = ScrollArea(self.sidebar.body)
         scroll.pack(fill=tk.BOTH, expand=True)
@@ -98,6 +106,53 @@ class StageEditorView(SceneView):
         )
         for key, tool in TOOL_KEYS.items():
             self.app.bind(f"<Key-{key}>", partial(self._on_tool_key, tool))
+
+    def _build_rail(self) -> None:
+        """Stack the pieces top to bottom: yours, the AI's, then the eraser."""
+        rail = tk.Frame(self.rail.body, bg=COLORS["card"])
+        rail.place(relx=0.5, rely=0.5, anchor="center")
+        self.rail_dividers: list[tk.Frame] = []
+        self.palette_buttons: dict[str, ToolButton] = {}
+        colors = {0: TEAM_COLORS[DEFAULT_PLAYER_COLOR], 1: TEAM_COLORS[DEFAULT_AI_COLOR]}
+        for owner, color in colors.items():
+            for piece in PIECE_ORDER:
+                code = f"P{owner}_{piece}"
+                button = ToolButton(
+                    rail,
+                    partial(self._piece_picture, piece, owner, color),
+                    partial(self._set_tool, code),
+                )
+                button.pack()
+                self.palette_buttons[code] = button
+            line = divider(rail)
+            line.pack(fill=tk.X)
+            self.rail_dividers.append(line)
+        eraser = ToolButton(rail, self._eraser_picture, partial(self._set_tool, ERASER))
+        eraser.pack()
+        self.palette_buttons[ERASER] = eraser
+
+    @staticmethod
+    def _piece_picture(piece: str, owner: int, color: str, size: int) -> Image.Image:
+        return art.token_image(piece, owner, color, size)
+
+    @staticmethod
+    def _eraser_picture(size: int) -> Image.Image:
+        return art.icon_image("close", size // 2, COLORS["ink_muted"])
+
+    def _fit_rail(self, height: int) -> None:
+        """Size the tools so the whole stack fits the rail without scrolling."""
+        gap = METRICS.px(TOOL_GAP)
+        tools = len(self.palette_buttons)
+        room = height - self.rail.inset() * 2 - gap * (tools + len(self.rail_dividers))
+        size = max(METRICS.target(), min(METRICS.px(TOOL_SIZE), room // tools))
+        for button in self.palette_buttons.values():
+            button.set_size(size)
+            button.pack_configure(pady=gap // 2)
+        for line in self.rail_dividers:
+            line.pack_configure(pady=gap)
+
+    def _rail_width(self) -> int:
+        return METRICS.px(TOOL_SIZE) + self.rail.inset() * 2
 
     def _place_default_squad(self) -> None:
         self.placed_pieces = {}
@@ -130,31 +185,11 @@ class StageEditorView(SceneView):
             on_select=self._on_size_change,
         ).pack(fill=tk.X, pady=(0, METRICS.px(SPACE_M) * 3 // 2))
 
-        section_title(form, "Pieces").pack(fill=tk.X, pady=(0, METRICS.px(SPACE_S)))
-        palette = tk.Frame(form, bg=COLORS["card"])
-        palette.pack(fill=tk.X)
-        palette.columnconfigure((0, 1), weight=1, uniform="palette")
-        gap = METRICS.px(SPACE_S) // 2
-        self.palette_buttons: dict[str, PillButton] = {}
-        for column, (owner, side) in enumerate(((0, "You"), (1, "AI"))):
-            for row, piece_type in enumerate("HEA"):
-                code = f"P{owner}_{piece_type}"
-                button = PillButton(
-                    palette,
-                    f"{side}: {PIECE_NAMES[piece_type]}",
-                    partial(self._set_tool, code),
-                )
-                button.grid(row=row, column=column, sticky="ew", padx=gap, pady=gap)
-                self.palette_buttons[code] = button
-        eraser = PillButton(palette, "Eraser", lambda: self._set_tool(ERASER), icon="close")
-        eraser.grid(row=3, column=0, sticky="ew", padx=gap, pady=gap)
-        self.palette_buttons[ERASER] = eraser
-        PillButton(palette, "Reset", self._clear_board, icon="restart").grid(
-            row=3, column=1, sticky="ew", padx=gap, pady=gap
-        )
+        PillButton(form, "Reset Board", self._clear_board, icon="restart").pack(fill=tk.X)
         WrapLabel(
             form,
-            "Keys 1-3 pick your pieces, 4-6 the AI pieces, 0 the eraser.",
+            "Pick a piece from the left column: the top three are yours, the next three "
+            "are the AI's. Keys 1-6 pick a piece and 0 the eraser.",
             font=font("caption"),
             fg=COLORS["ink_muted"],
         ).pack(fill=tk.X, pady=(METRICS.px(SPACE_M), METRICS.px(SPACE_M)))
@@ -174,12 +209,15 @@ class StageEditorView(SceneView):
         margin = top - self.header.height() - self.header.geometry[1]
         gutter = METRICS.px(GUTTER)
         available_h = height - top - margin
+        rail_w = self._rail_width()
         if width >= height * LANDSCAPE_RATIO:
             side_w = min(METRICS.px(SIDEBAR_WIDTH), width // 2 - margin)
-            area = width - side_w - margin * 2 - gutter
+            area = width - side_w - rail_w - margin * 2 - gutter * 2
             dimension = max(METRICS.px(MIN_BOARD), min(area, available_h))
+            self.rail.place(margin, top, rail_w, available_h)
+            self._fit_rail(available_h)
             self.board.place(
-                margin + (area - dimension) // 2,
+                margin + rail_w + gutter + (area - dimension) // 2,
                 top + (available_h - dimension) // 2,
                 dimension,
             )
@@ -187,9 +225,15 @@ class StageEditorView(SceneView):
         else:
             dimension = max(
                 METRICS.px(MIN_BOARD),
-                min(width - margin * 2, round(available_h * PORTRAIT_BOARD_SHARE)),
+                min(
+                    width - margin * 2 - rail_w - gutter,
+                    round(available_h * PORTRAIT_BOARD_SHARE),
+                ),
             )
-            self.board.place((width - dimension) // 2, top, dimension)
+            rail_x = (width - rail_w - gutter - dimension) // 2
+            self.rail.place(rail_x, top, rail_w, dimension)
+            self._fit_rail(dimension)
+            self.board.place(rail_x + rail_w + gutter, top, dimension)
             panel_top = top + dimension + gutter
             self.sidebar.place(margin, panel_top, width - margin * 2, height - panel_top - margin)
         self._render_board()
@@ -217,7 +261,7 @@ class StageEditorView(SceneView):
 
     def _refresh_palette_highlight(self) -> None:
         for code, button in self.palette_buttons.items():
-            button.set_variant("primary" if code == self.active_tool else "secondary")
+            button.set_selected(code == self.active_tool)
 
     def _on_size_change(self, _value: str | None = None) -> None:
         new_size = int(self.var_size.get().split("x")[0])

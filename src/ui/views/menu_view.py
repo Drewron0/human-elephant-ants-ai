@@ -1,4 +1,4 @@
-"""Main menu: a centered title with a top-to-bottom stack of raised game buttons."""
+"""Main menu: a card with the title and raised game buttons on a meadow scene."""
 
 import tkinter as tk
 from collections.abc import Callable
@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 from PIL import ImageTk
 
 from src.ui import art
-from src.ui.scene import SceneView
-from src.ui.theme import COLORS, MARGIN, METRICS, SPACE_L, SPACE_S, font
+from src.ui.scene import Panel, SceneView
+from src.ui.theme import COLORS, MARGIN, METRICS, SPACE_L, SPACE_M, SPACE_S, font
 from src.ui.widgets import RaisedButton, Variant
 
 if TYPE_CHECKING:
@@ -27,8 +27,11 @@ class MainMenuView(SceneView):
 
     def __init__(self, parent: tk.Misc, app: "GameApp") -> None:
         super().__init__(parent, app)
-        self.column = tk.Frame(self.stage, bg=COLORS["page"])
-        self._column_item = self.stage.create_window(0, 0, window=self.column)
+        self._scene_item = self.stage.create_image(0, 0, anchor="nw")
+        self._scene_size = (0, 0)
+        self._scene_photo: ImageTk.PhotoImage | None = None
+        self.card = Panel(self, fill="page", padding=SPACE_M)
+        self.column = self.card.body
         self.crest = tk.Frame(self.column, bg=COLORS["page"])
         self._token_photos: list[ImageTk.PhotoImage] = []
         for piece in "EHA":
@@ -43,14 +46,14 @@ class MainMenuView(SceneView):
         self.title_label = tk.Label(
             self.column, text=TITLE, font=font("hero"), bg=COLORS["page"], fg=COLORS["ink"]
         )
-        self.title_label.pack()
-        tk.Label(
+        self.title_label.pack(pady=(0, METRICS.px(SPACE_S)))
+        self.tagline = tk.Label(
             self.column,
             text=TAGLINE,
             font=font("body"),
             bg=COLORS["page"],
             fg=COLORS["ink_muted"],
-        ).pack(pady=(METRICS.px(SPACE_S), METRICS.px(MARGIN)))
+        )
 
         entries: tuple[tuple[str, Callable[[], None], Variant, str, bool], ...] = (
             ("Versus AI", partial(app.show_view, "config"), "gold", "play", True),
@@ -76,14 +79,31 @@ class MainMenuView(SceneView):
     def _on_arrow(self, index: int, delta: int, _event: tk.Event) -> None:
         self.items[(index + delta) % len(self.items)].focus_set()
 
+    def _draw_scene(self, width: int, height: int) -> None:
+        if self._scene_size != (width, height):
+            self._scene_size = (width, height)
+            self._scene_photo = ImageTk.PhotoImage(
+                art.menu_background_image(width, height), master=self.stage
+            )
+            self.stage.itemconfigure(self._scene_item, image=self._scene_photo)
+
     def layout(self, width: int, height: int) -> None:
-        """Center the column, leaving out the characters when the window is short."""
-        margin = METRICS.px(MARGIN)
-        self.stage.coords(self._column_item, width // 2, height // 2)
-        self.stage.itemconfigure(
-            self._column_item, width=min(METRICS.px(MENU_WIDTH), width - margin * 2)
-        )
+        """Center the card on the scene, dropping decoration when the window is short."""
+        self._draw_scene(width, height)
+        inset = self.card.inset()
+        edge = METRICS.px(SPACE_M)
+        card_width = min(METRICS.px(MENU_WIDTH) + inset * 2, width - METRICS.px(MARGIN) * 2)
+        room = height - edge * 2
         self.crest.pack(pady=(0, METRICS.px(SPACE_L)), before=self.title_label)
-        self.column.update_idletasks()
-        if self.column.winfo_reqheight() > height - margin * 2:
+        self.tagline.pack(pady=(0, METRICS.px(SPACE_L)), before=self.items[0])
+        if self.card.fit_height() > room:
             self.crest.pack_forget()
+        if self.card.fit_height() > room:
+            self.tagline.pack_forget()
+        card_height = self.card.fit_height()
+        self.card.place(
+            (width - card_width) // 2,
+            max(edge, (height - card_height) // 2),
+            card_width,
+            card_height,
+        )

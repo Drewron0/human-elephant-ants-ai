@@ -26,8 +26,8 @@ if TYPE_CHECKING:
 
 FORM_WIDTH = 560
 AI_ENGINES = {
-    "Standard Minimax": "standard",
     "Optimized Alpha-Beta (d=6)": OPTIMIZED_DIFFICULTY,
+    "Standard Minimax": "standard",
 }
 
 

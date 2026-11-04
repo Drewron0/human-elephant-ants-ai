@@ -46,8 +46,7 @@ class PuzzleGameView(PlayView):
         self.session = PuzzleSession(scenario, show_metrics=self.show_metrics)
         self.state = scenario.create_initial_state()
         self.is_game_active = True
-        self.ai_timer_id: str | None = None
-        self._patience_id: str | None = None
+        self.defender_model: str = config.get("agent_model", OPTIMIZED_D6)
         self._ai_task: BackgroundTask | None = None
         self.start_time = time.time()
         self._build_ui()
@@ -103,23 +102,19 @@ class PuzzleGameView(PlayView):
 
         actions = self.action_bar
         gap = METRICS.px(SPACE_S) // 2
-        self.btn_ai_retry = PillButton(
-            actions, "Retry Proof", self._trigger_ai_move, icon="restart"
-        )
-        self.btn_ai_retry.grid(row=0, column=0, columnspan=2, sticky="ew", pady=gap)
-        self.btn_ai_fallback = PillButton(
-            actions, "Use Alpha-Beta Reply", self._use_alpha_beta_reply
-        )
-        self.btn_ai_fallback.grid(row=1, column=0, columnspan=2, sticky="ew", pady=gap)
-        self.btn_ai_retry.grid_remove()
-        self.btn_ai_fallback.grid_remove()
+        self.btn_ai_retry = PillButton(actions, "Retry Proof", self._trigger_ai_move)
+        self.btn_ai_fallback = PillButton(actions, "Use Alpha-Beta", self._use_alpha_beta_reply)
+        if self.defender_model == EXACT_DEFENDER:
+            self.btn_ai_retry.grid(row=0, column=0, sticky="ew", padx=(0, gap), pady=gap)
+            self.btn_ai_fallback.grid(row=0, column=1, sticky="ew", padx=(gap, 0), pady=gap)
+        self._set_recovery(retry=False, fallback=False)
         self.btn_undo = PillButton(actions, "Undo", self._on_undo, icon="undo")
-        self.btn_undo.grid(row=2, column=0, sticky="ew", padx=(0, gap), pady=gap)
+        self.btn_undo.grid(row=1, column=0, sticky="ew", padx=(0, gap), pady=gap)
         PillButton(actions, "Reset", self._on_reset_attempt, icon="restart").grid(
-            row=2, column=1, sticky="ew", padx=(gap, 0), pady=gap
+            row=1, column=1, sticky="ew", padx=(gap, 0), pady=gap
         )
         PillButton(actions, "Give Up", self._on_concede, variant="destructive", icon="flag").grid(
-            row=3, column=0, columnspan=2, sticky="ew", pady=gap
+            row=2, column=0, columnspan=2, sticky="ew", pady=gap
         )
 
     def _player_colors(self) -> dict[int, str]:
@@ -149,13 +144,14 @@ class PuzzleGameView(PlayView):
         if not self.is_game_active or self.session.is_neutralized or self.state.current_turn != 1:
             return
         self._cancel_defender()
-        self._hide_recovery()
+        self._set_recovery(retry=False, fallback=False)
         position = self.state.clone()
-        model = self.config_options.get("agent_model", EXACT_DEFENDER)
+        model = self.defender_model
         if model == EXACT_DEFENDER:
             remaining = self.session.s_max - self.session.current_attempt_steps
             policy = dict(self.scenario.defender_policy)
             self._set_status("Proving the best reply...", COLORS["ink_muted"])
+            self._set_recovery(retry=False, fallback=True)
             self._ai_task = BackgroundTask(
                 self,
                 lambda cancel, _report: get_exact_defender_reply(
@@ -164,7 +160,6 @@ class PuzzleGameView(PlayView):
                 self._on_exact_reply,
                 self._on_ai_failed,
             )
-            self._patience_id = self.after(settings.EXACT_PATIENCE_MS, self._show_recovery)
         else:
             depth = self.config_options.get("search_depth", settings.OPTIMIZED_DEFAULT_DEPTH)
             self._set_status("The defender is thinking...", COLORS["ink_muted"])
@@ -179,7 +174,7 @@ class PuzzleGameView(PlayView):
     def _use_alpha_beta_reply(self) -> None:
         """Answer with the heuristic agent, only because the player asked for it."""
         self._cancel_defender()
-        self._hide_recovery()
+        self._set_recovery(retry=False, fallback=False)
         position = self.state.clone()
         self._set_status("Using an unproven Alpha-Beta reply...", COLORS["ink_muted"])
         self._ai_task = BackgroundTask(
@@ -199,11 +194,10 @@ class PuzzleGameView(PlayView):
 
     def _on_exact_reply(self, result: dict[str, Any]) -> None:
         self._ai_task = None
-        self._cancel_patience()
         status = result["status"]
         if status == "PROVEN":
             self._merge_policy(result["defender_policy"])
-            self._hide_recovery()
+            self._set_recovery(retry=False, fallback=False)
             self._apply_defender_move(
                 result["move"],
                 result["eval_score"],
@@ -211,7 +205,7 @@ class PuzzleGameView(PlayView):
                 result["proof_horizon"],
             )
         elif status == "NO_MOVES":
-            self._hide_recovery()
+            self._set_recovery(retry=False, fallback=False)
             self._apply_defender_move(None, result["eval_score"], result["telemetry"])
         elif status == "TERMINAL":
             self._update_ui_state()
@@ -220,9 +214,11 @@ class PuzzleGameView(PlayView):
 
     def _on_ai_failed(self, message: str) -> None:
         self._ai_task = None
-        self._cancel_patience()
         logger.error("Defender failed: %s", message)
-        self._show_unverified_defense()
+        if self.defender_model == EXACT_DEFENDER:
+            self._show_unverified_defense()
+        else:
+            self._set_status("The defender could not reply. Undo or reset.", COLORS["danger"])
 
     def _merge_policy(self, updates: dict[str, Any]) -> None:
         policy = self.scenario.defender_policy
@@ -239,34 +235,21 @@ class PuzzleGameView(PlayView):
             ):
                 policy[key] = entry
 
-    def _show_recovery(self) -> None:
-        self._patience_id = None
-        self.btn_ai_fallback.grid()
-
-    def _hide_recovery(self) -> None:
-        self.btn_ai_retry.grid_remove()
-        self.btn_ai_fallback.grid_remove()
+    def _set_recovery(self, retry: bool, fallback: bool) -> None:
+        """Enable the recovery buttons; they keep their place so nothing below them moves."""
+        self.btn_ai_retry.set_enabled(retry)
+        self.btn_ai_fallback.set_enabled(fallback)
 
     def _show_unverified_defense(self) -> None:
         self._set_status(
             "The proof ran out of budget, so no reply was guessed.", COLORS["ink_muted"]
         )
-        self.btn_ai_retry.grid()
-        self.btn_ai_fallback.grid()
-
-    def _cancel_patience(self) -> None:
-        if self._patience_id is not None:
-            self.after_cancel(self._patience_id)
-            self._patience_id = None
+        self._set_recovery(retry=True, fallback=True)
 
     def _cancel_defender(self) -> None:
-        self._cancel_patience()
         if self._ai_task is not None:
             self._ai_task.cancel()
             self._ai_task = None
-        if self.ai_timer_id is not None:
-            self.after_cancel(self.ai_timer_id)
-            self.ai_timer_id = None
 
     def _apply_defender_move(
         self,
@@ -293,15 +276,9 @@ class PuzzleGameView(PlayView):
             proof_horizon=proof_horizon,
         )
 
-        def play() -> None:
-            self.ai_timer_id = None
-            if not self.is_game_active:
-                return
-            make_puzzle_move(self.state, start, end)
-            self.last_move = (start, end)
-            self._update_ui_state()
-
-        self.ai_timer_id = self.after(settings.DEFENDER_REPLY_DELAY_MS, play)
+        make_puzzle_move(self.state, start, end)
+        self.last_move = (start, end)
+        self._update_ui_state()
 
     def _set_status(self, text: str, color: str) -> None:
         self.lbl_status.configure(text=text, fg=color)
@@ -369,7 +346,7 @@ class PuzzleGameView(PlayView):
         if not self.is_game_active:
             return
         self._cancel_defender()
-        self._hide_recovery()
+        self._set_recovery(retry=False, fallback=False)
         if self.state.undo():
             self.session.record_undo()
             if self.state.current_turn == 1:
@@ -380,7 +357,7 @@ class PuzzleGameView(PlayView):
 
     def _on_reset_attempt(self) -> None:
         self._cancel_defender()
-        self._hide_recovery()
+        self._set_recovery(retry=False, fallback=False)
         self.session.reset_attempt()
         self.state = self.scenario.create_initial_state()
         self.clear_selection()
