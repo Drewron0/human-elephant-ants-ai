@@ -20,6 +20,7 @@ RAISE_DEPTH = 5
 TALL_EXTRA = 8
 PROGRESS_HEIGHT = 8
 ACTIVE_BORDER = 2
+TOOL_PADDING = 6
 
 Variant = Literal["primary", "gold", "secondary", "destructive"]
 VARIANTS: dict[str, dict[str, str]] = {
@@ -256,6 +257,74 @@ class RaisedButton(PillButton):
     def _label_y(self, height: int) -> float:
         sink = self._depth() * art.PRESS_SINK if self._pressed else 0
         return (height - self._depth()) / 2 + sink
+
+
+class ToolButton(tk.Canvas):
+    """A square picture button that stays highlighted while it is the selected tool."""
+
+    def __init__(
+        self,
+        parent: tk.Misc,
+        picture: Callable[[int], Image.Image],
+        command: Callable[[], Any],
+    ) -> None:
+        super().__init__(
+            parent, bg=parent.cget("bg"), highlightthickness=0, bd=0, takefocus=1, cursor="hand2"
+        )
+        self.picture = picture
+        self.command = command
+        self.selected = False
+        self._hover = False
+        self._size = METRICS.target()
+        self._images: list[ImageTk.PhotoImage] = []
+        self.bind("<Enter>", lambda _e: self._set_hover(True))
+        self.bind("<Leave>", lambda _e: self._set_hover(False))
+        self.bind("<ButtonRelease-1>", self._on_release)
+        self.bind("<FocusIn>", lambda _e: self._render())
+        self.bind("<FocusOut>", lambda _e: self._render())
+        self.bind("<Return>", lambda _e: self.command())
+        self.bind("<space>", lambda _e: self.command())
+        self.set_size(self._size)
+
+    def set_size(self, size: int) -> None:
+        """Resize the square button."""
+        self._size = size
+        self.configure(width=size, height=size)
+        self._render()
+
+    def set_selected(self, selected: bool) -> None:
+        """Mark this button as the active tool."""
+        self.selected = selected
+        self._render()
+
+    def _set_hover(self, hover: bool) -> None:
+        self._hover = hover
+        self._render()
+
+    def _on_release(self, event: tk.Event) -> None:
+        if 0 <= event.x < self.winfo_width() and 0 <= event.y < self.winfo_height():
+            self.command()
+
+    def _render(self) -> None:
+        size = self._size
+        if self.selected:
+            fill, border = COLORS["accent_soft"], COLORS["accent"]
+        elif self._hover:
+            fill, border = COLORS["card_alt"], COLORS["line_strong"]
+        else:
+            fill, border = COLORS["card"], COLORS["card"]
+        if self.focus_get() is self:
+            border = COLORS["focus"]
+        edge = ACTIVE_BORDER if self.selected else 1
+        face = ImageTk.PhotoImage(
+            art.panel_image(size, size, METRICS.px(RADIUS), fill, border, edge), master=self
+        )
+        inner = max(1, size - METRICS.px(TOOL_PADDING) * 2)
+        symbol = ImageTk.PhotoImage(self.picture(inner), master=self)
+        self._images = [face, symbol]
+        self.delete("all")
+        self.create_image(0, 0, anchor="nw", image=face)
+        self.create_image(size / 2, size / 2, image=symbol)
 
 
 class RoundedCard(tk.Canvas):

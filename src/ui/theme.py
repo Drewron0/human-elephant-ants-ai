@@ -44,6 +44,13 @@ COLORS: Final[dict[str, str]] = {
     "selected": "#6AAA64",
     "capture": "#B3362B",
     "last_move": "#FBF2BF",
+    "scene_sky_top": "#BFE3F2",
+    "scene_sky_low": "#EEF8EA",
+    "scene_sun": "#FBE38A",
+    "scene_cloud": "#FFFFFF",
+    "scene_hill_far": "#B9DDA6",
+    "scene_hill_mid": "#8FC67C",
+    "scene_hill_near": "#6AAA64",
 }
 
 TEAM_COLORS: Final[dict[str, str]] = {

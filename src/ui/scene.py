@@ -20,9 +20,10 @@ HEADER_HEIGHT = 76
 class Panel:
     """A flat rounded card on the page holding ordinary Tk widgets in ``body``."""
 
-    def __init__(self, view: "SceneView", fill: str = "card") -> None:
+    def __init__(self, view: "SceneView", fill: str = "card", padding: int = SPACE_L) -> None:
         self.view = view
         self.fill = COLORS[fill]
+        self.padding = padding
         self.body = tk.Frame(view.stage, bg=self.fill)
         self._image_item = view.stage.create_image(0, 0, anchor="nw", state=tk.HIDDEN)
         self._window_item = view.stage.create_window(
@@ -31,10 +32,9 @@ class Panel:
         self._photo: ImageTk.PhotoImage | None = None
         self.geometry: tuple[int, int, int, int] = (0, 0, 0, 0)
 
-    @staticmethod
-    def inset() -> int:
+    def inset(self) -> int:
         """Return the padding between the card edge and its content."""
-        return METRICS.px(SPACE_L)
+        return METRICS.px(self.padding)
 
     def place(self, x: int, y: int, width: int, height: int) -> None:
         """Move and resize the card."""

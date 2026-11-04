@@ -7,7 +7,7 @@ antialiased edges that Tk canvases cannot produce, and caches by exact size.
 import math
 from functools import lru_cache
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 from config import settings
 from src.core.game_logic import PieceSpec
@@ -18,6 +18,23 @@ PIECE_FILES: dict[str, str] = {"H": "orang.png", "E": "gajah.png", "A": "semut.p
 PRESS_SINK = 0.6
 TILE_GAP_RATIO = 0.05
 TILE_RADIUS_DIVISOR = 8
+ARROW_ARC = (20, 285)
+ARROW_HALF_BASE = 0.17
+ARROW_LENGTH = 0.24
+SCENE_SCALE = 2
+SCENE_STEP = 6
+SCENE_SOFTEN = 1.4
+SCENE_HILLS: tuple[tuple[str, float, float, float, float], ...] = (
+    ("scene_hill_far", 0.58, 0.05, 1.3, 0.4),
+    ("scene_hill_mid", 0.70, 0.06, 1.0, 2.2),
+    ("scene_hill_near", 0.84, 0.05, 1.6, 4.1),
+)
+SCENE_CLOUDS: tuple[tuple[float, float, float], ...] = (
+    (0.12, 0.17, 0.09),
+    (0.34, 0.09, 0.06),
+    (0.70, 0.20, 0.07),
+    (0.90, 0.33, 0.05),
+)
 ICON_NAMES = (
     "back",
     "chevron",
@@ -337,15 +354,64 @@ def cycle_diagram_image(dimension: int, token_color: str) -> Image.Image:
 def _icon_arc_arrow(
     draw: ImageDraw.ImageDraw, size: int, color: tuple[int, ...], flip: bool
 ) -> None:
-    """Draw the circular arrow shared by the undo and restart icons."""
+    """Draw the circular arrow shared by undo and restart; undo is its mirror image."""
     stroke = size // 9
-    box = [size * 0.2, size * 0.2, size * 0.8, size * 0.8]
-    draw.arc(box, 200 if flip else 300, 170 if flip else 240, fill=color, width=stroke)
+    center = size / 2
+    radius = size * 0.36
+    box = [center - radius, center - radius, center + radius, center + radius]
+    gap_end, arrow_angle = ARROW_ARC
+    start, end = (180 - arrow_angle, 180 - gap_end) if flip else (gap_end, arrow_angle)
+    draw.arc(box, start, end, fill=color, width=stroke)
+    angle = math.radians(arrow_angle)
+    x = center + radius * math.cos(angle)
+    y = center + radius * math.sin(angle)
+    forward = (-math.sin(angle), math.cos(angle))
+    side = (forward[1], -forward[0])
+    half_base, length = size * ARROW_HALF_BASE, size * ARROW_LENGTH
+    head = [
+        (x + side[0] * half_base, y + side[1] * half_base),
+        (x - side[0] * half_base, y - side[1] * half_base),
+        (x + forward[0] * length, y + forward[1] * length),
+    ]
     if flip:
-        tip = [(size * 0.08, size * 0.3), (size * 0.34, size * 0.3), (size * 0.19, size * 0.55)]
-    else:
-        tip = [(size * 0.92, size * 0.3), (size * 0.66, size * 0.3), (size * 0.81, size * 0.55)]
-    draw.polygon(tip, fill=color)
+        head = [(size - point_x, point_y) for point_x, point_y in head]
+    draw.polygon(head, fill=color)
+
+
+def _scene_cloud(draw: ImageDraw.ImageDraw, x: float, y: float, size: float) -> None:
+    """Draw a soft cloud from a few overlapping ellipses."""
+    fill = _hex_rgba(COLORS["scene_cloud"])
+    for offset, lift, scale in ((-0.9, 0.0, 0.7), (0.0, 0.25, 1.0), (0.9, 0.0, 0.75)):
+        radius = size * scale
+        left, top = x + offset * size - radius, y - lift * size - radius * 0.55
+        draw.ellipse([left, top, left + radius * 2, top + radius * 1.1], fill=fill)
+
+
+@lru_cache(maxsize=2)
+def menu_background_image(width: int, height: int) -> Image.Image:
+    """Render the menu's meadow: sky, sun, clouds and three layers of hills."""
+    w, h = max(1, width // SCENE_SCALE), max(1, height // SCENE_SCALE)
+    top = Image.new("RGB", (w, h), COLORS["scene_sky_top"])
+    low = Image.new("RGB", (w, h), COLORS["scene_sky_low"])
+    fade = Image.linear_gradient("L").resize((w, h))
+    image = Image.composite(low, top, fade).convert("RGBA")
+
+    sun = h * 0.11
+    draw = ImageDraw.Draw(image)
+    sun_x, sun_y = w * 0.84, h * 0.17
+    draw.ellipse(
+        [sun_x - sun, sun_y - sun, sun_x + sun, sun_y + sun], fill=_hex_rgba(COLORS["scene_sun"])
+    )
+    for x, y, size in SCENE_CLOUDS:
+        _scene_cloud(draw, w * x, h * y, h * size)
+    for color, level, swell, waves, phase in SCENE_HILLS:
+        crest = [
+            (x, h * (level + swell * math.sin(x / w * math.tau * waves + phase)))
+            for x in range(0, w + SCENE_STEP, SCENE_STEP)
+        ]
+        draw.polygon([*crest, (w, h), (0, h)], fill=_hex_rgba(COLORS[color]))
+    soft = image.convert("RGB").filter(ImageFilter.GaussianBlur(SCENE_SOFTEN))
+    return soft.resize((width, height), Image.Resampling.BICUBIC)
 
 
 @lru_cache(maxsize=128)
