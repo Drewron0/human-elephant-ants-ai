@@ -164,7 +164,7 @@ def evaluate_non_transitive(
 # =====================================================================
 
 
-# untuk mengurutkan langkah yang akan diambil lebih dulu
+# untuk MENGURUTKAN langkah yang akan diambil lebih dulu
 # setiap piece dihitung nilainya : berdasarkan
 # nilai = 10 * (jumlah_mangsa + 1) / (jumlah_predator + 1)
 def order_moves_mvv_lva(
@@ -223,10 +223,10 @@ def order_moves_mvv_lva(
 # =====================================================================
 
 
-# dipake untuk
-# 1. proposed algo (dynamic value)
-# 2. baseline algo minimax (static )
-# 3.
+# dipake untuk, dan digunakan di
+# 1. proposed algo (dynamic PIECE_VALUE) minimax_ab_internal()
+# 2. baseline algo minimax (static PIECE_VALUE) minimax_vanilla_internal()
+# 3. get_defender_move()
 class SearchTelemetry:
     def __init__(self):
         self.nodes_generated: int = 0
