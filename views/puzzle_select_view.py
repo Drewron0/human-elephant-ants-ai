@@ -117,20 +117,22 @@ class PuzzleSelectView(tk.Frame):
 
         # AI model selector
         tk.Label(content, text="AI Defender Model:", font=(FONT_NAME, 9, "bold"), bg=THEME['surface'], fg=THEME['text']).pack(anchor="w", pady=(4, 2))
-        self.var_ai_model = tk.StringVar(value="Optimized (Alpha-Beta d=6)")
+        self.var_ai_model = tk.StringVar(value="Exact Defender (best defense)")
         cb_model = ttk.Combobox(
             content,
             textvariable=self.var_ai_model,
             values=[
-                "Optimized (Alpha-Beta d=6)",
-                "Optimized (Alpha-Beta d=3)",
-                "Vanilla Minimax (d=3, Static)",
-                "Random Move Agent"
+                "Exact Defender (best defense)",
+                "Practice: Vanilla Minimax (d=3, Static)",
+                "Practice: Random Move Agent"
             ],
             state="readonly",
             font=(FONT_NAME, 9)
         )
         cb_model.pack(fill=tk.X, pady=(0, 10))
+        tk.Label(content, text="Exact Defender follows proven best replies. Practice baselines can play weaker moves.",
+                 font=(FONT_NAME, 8), bg=THEME['surface'], fg=THEME['text_muted'],
+                 wraplength=270, justify="left").pack(anchor="w", pady=(0, 8))
 
         # Show search metrics toggle
         metrics_box = tk.Frame(content, bg=THEME['surface_card'], padx=8, pady=6, bd=1, relief=tk.SOLID, highlightbackground=THEME['border'], highlightthickness=1)
@@ -352,8 +354,8 @@ class PuzzleSelectView(tk.Frame):
         storage.save_last_username(p_name)
 
         model_val = self.var_ai_model.get()
-        if "Alpha-Beta d=6" in model_val:
-            agent_model = 'proposed_d6'
+        if "Exact Defender" in model_val or "Alpha-Beta d=6" in model_val:
+            agent_model = 'exact_defender'
             depth = 6
         elif "Alpha-Beta d=3" in model_val:
             agent_model = 'proposed_d3'

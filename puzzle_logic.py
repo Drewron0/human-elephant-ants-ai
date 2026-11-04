@@ -64,16 +64,18 @@ def bfs_safe_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
 
 def verify_puzzle(board_size: int, pieces: List[Tuple[int, int, int, str]],
                   target_coord: Optional[Tuple[int, int]] = None, max_steps: int = 14,
-                  time_budget: float = 1.0, node_budget: int = 30000) -> Dict[str, Any]:
+                  time_budget: float = 1.0, node_budget: int = 30000,
+                  current_turn: int = 0, cancel_event=None) -> Dict[str, Any]:
     """Prove the shortest forced corner win, or explicitly return an unknown result.
 
     The bounded search considers every legal defensive reply. A geometric
     certificate handles sparse race puzzles without enumerating equivalent replies.
     """
     target = target_coord or (0, board_size - 1)
-    if board_size < 2 or max_steps < 0:
+    if board_size < 2 or max_steps < 0 or current_turn not in (0, 1):
         raise ValueError("Invalid board size or verification horizon")
     state = GameState(board_size, custom_setup=True)
+    state.current_turn = current_turn
     state.target_corners[0] = target
     occupied = set()
     for r, c, owner, pt in pieces:
@@ -87,10 +89,33 @@ def verify_puzzle(board_size: int, pieces: List[Tuple[int, int, int, str]],
     deadline = time.perf_counter() + max(0.0, time_budget)
     cache = {}
     expanded = 0
+    generated = evaluated = pruned = 0
+
+    def outcome(status, steps=None, path=None, moves=None, method='', reason=''):
+        policy = {}
+        if status != 'UNVERIFIED':
+            for (cells, turn, horizon), (value, line, _) in cache.items():
+                if (turn != 1 or not line or line[0][0] != 1
+                        or ((current_turn == 0 or status == 'VERIFIED') and math.isinf(value))):
+                    continue
+                key = puzzle_position_key(board_size, cells, target)
+                distance = None if math.isinf(value) else int(value)
+                previous = policy.get(key)
+                if (previous is None or (previous['steps'] is None and distance is not None)
+                        or (previous['steps'] is None and distance is None
+                            and horizon > previous['remaining'])):
+                    policy[key] = {'move': line[0][1:], 'steps': distance, 'remaining': horizon}
+        result = dict(status=status, steps=steps, path=path or [], moves=moves or [],
+                      method=method, reason=reason, defender_policy=policy,
+                      nodes_generated=generated, nodes_evaluated=evaluated, nodes_pruned=pruned)
+        if status == 'VERIFIED':
+            result['position_key'] = puzzle_position_key(board_size, pieces, target)
+        return result
 
     def solve(position, remaining):
-        nonlocal expanded
-        if time.perf_counter() >= deadline or expanded >= node_budget:
+        nonlocal expanded, generated, evaluated, pruned
+        if ((cancel_event is not None and cancel_event.is_set())
+                or time.perf_counter() >= deadline or expanded >= node_budget):
             raise TimeoutError
         cells = tuple((r, c, p.owner, p.p_type) for r, row in enumerate(position.board)
                       for c, p in enumerate(row) if p)
@@ -136,10 +161,17 @@ def verify_puzzle(board_size: int, pieces: List[Tuple[int, int, int, str]],
         cost = 1 if turn == 0 else 0
         if remaining < cost:
             return math.inf, [], 'adversarial'
-        moves.sort(key=lambda m: max(abs(m[1][0] - target[0]), abs(m[1][1] - target[1])))
+        if turn == 0:
+            moves.sort(key=lambda m: max(abs(m[1][0] - target[0]), abs(m[1][1] - target[1])))
+        else:
+            home = position.target_corners[1]
+            moves.sort(key=lambda m: (m[1] != home, position.get_piece(*m[1]) is None,
+                                      max(abs(m[1][0] - home[0]), abs(m[1][1] - home[1]))))
+        generated += len(moves)
         best = math.inf if turn == 0 else -math.inf
         trail = []
-        for start, end in moves:
+        for index, (start, end) in enumerate(moves):
+            evaluated += 1
             child = position.clone()
             child.make_move(start, end)
             # Capturing the final defender does not replace the corner objective.
@@ -150,6 +182,7 @@ def verify_puzzle(board_size: int, pieces: List[Tuple[int, int, int, str]],
             if (turn == 0 and value < best) or (turn == 1 and value > best):
                 best, trail = value, [(turn, start, end)] + continuation
             if (turn == 0 and best == lower_bound) or (turn == 1 and math.isinf(best)):
+                pruned += len(moves) - index - 1
                 break
         cache[key] = (best, trail, 'adversarial')
         return cache[key]
@@ -163,18 +196,16 @@ def verify_puzzle(board_size: int, pieces: List[Tuple[int, int, int, str]],
             if not math.isinf(steps):
                 break
     except TimeoutError:
-        return {'status': 'UNVERIFIED', 'steps': None, 'path': [], 'moves': [],
-                'reason': 'Verification time or node budget exhausted'}
+        return outcome('UNVERIFIED', reason='Verification time or node budget exhausted')
     if math.isinf(steps):
-        return {'status': 'NO_WIN_WITHIN_LIMIT', 'steps': None, 'path': [], 'moves': [],
-                'reason': f'No forced corner win within {max_steps} player moves'}
+        return outcome('NO_WIN_WITHIN_LIMIT', moves=moves,
+                       reason=f'No forced corner win within {max_steps} player moves')
     player_moves = [(start, end) for owner, start, end in moves if owner == 0]
     path = [player_moves[0][0]] + [end for _, end in player_moves] if player_moves else [target]
     if any(a[1] != b[0] for a, b in zip(player_moves, player_moves[1:])):
         path = []  # A coordinate route cannot represent switches between player pieces.
-    return {'status': 'VERIFIED', 'steps': int(steps), 'path': path, 'moves': moves,
-            'method': method, 'reason': 'Forced corner win verified against all legal replies',
-            'position_key': puzzle_position_key(board_size, pieces, target)}
+    return outcome('VERIFIED', int(steps), path, moves, method,
+                   'Forced corner win verified against all legal replies')
 
 
 def solve_adversarial_optimal_path(board_size: int, pieces: List[Tuple[int, int, int, str]],
@@ -213,7 +244,8 @@ class PuzzleScenario:
                  optimal_path: Optional[List[Tuple[int, int]]] = None,
                  is_custom: bool = False, verification_status: str = 'UNVERIFIED',
                  verification_method: str = '', verification_key: str = '',
-                 optimal_moves: Optional[List[Any]] = None, move_limit: Optional[int] = None):
+                 optimal_moves: Optional[List[Any]] = None, move_limit: Optional[int] = None,
+                 defender_policy: Optional[Dict[str, Any]] = None):
         self.id = id_str
         self.title = title
         self.description = description
@@ -225,6 +257,7 @@ class PuzzleScenario:
         self.s_optimal = s_optimal if verified else None
         self.optimal_path = (optimal_path or []) if verified else []
         self.optimal_moves = (optimal_moves or []) if verified else []
+        self.defender_policy = (defender_policy or {}) if verified else {}
         if verified:
             self.s_max = 3 * self.s_optimal
         else:
@@ -251,7 +284,7 @@ class PuzzleScenario:
         return state
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        data = {
             'id': self.id,
             'title': self.title,
             'description': self.description,
@@ -266,6 +299,9 @@ class PuzzleScenario:
             'verification_method': self.verification_method,
             'verification_key': self.verification_key
         }
+        if self.defender_policy:
+            data['defender_policy'] = self.defender_policy
+        return data
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'PuzzleScenario':
@@ -278,6 +314,7 @@ class PuzzleScenario:
             pieces=[(p[0], p[1], p[2], p[3]) for p in data.get('pieces', [])],
             optimal_path=data.get('optimal_path', []),
             optimal_moves=data.get('optimal_moves', []),
+            defender_policy=data.get('defender_policy', {}),
             is_custom=data.get('is_custom', True),
             verification_status=data.get('verification_status', 'UNVERIFIED'),
             verification_method=data.get('verification_method', ''),
@@ -369,7 +406,8 @@ class PuzzleSession:
     def record_ai_telemetry(self, source_coord: Tuple[int, int], target_coord: Tuple[int, int],
                             eval_score: float, t_turn: float, nodes_gen: int,
                             nodes_eval: int, prune_efficiency: float,
-                            completed_depth: int = 0, timed_out: bool = False) -> None:
+                            completed_depth: int = 0, timed_out: bool = False,
+                            proof_horizon: Optional[int] = None) -> None:
         self.ai_telemetry_history.append({
             'action': (source_coord, target_coord),
             'eval_score': eval_score,
@@ -377,7 +415,8 @@ class PuzzleSession:
             'nodes_gen': nodes_gen,
             'nodes_eval': nodes_eval,
             'prune_efficiency': prune_efficiency,
-            'completed_depth': completed_depth, 'timed_out': timed_out
+            'completed_depth': completed_depth, 'timed_out': timed_out,
+            'proof_horizon': proof_horizon
         })
 
     def reset_attempt(self) -> None:

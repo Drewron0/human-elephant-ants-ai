@@ -436,6 +436,7 @@ class StageEditorView(tk.Frame):
             'pieces': pieces_list,
             'optimal_path': path,
             'optimal_moves': self.last_verification['moves'],
+            'defender_policy': self.last_verification.get('defender_policy', {}),
             'verification_status': 'VERIFIED',
             'verification_method': self.last_verification['method'],
             'verification_key': self.last_verification['position_key'],

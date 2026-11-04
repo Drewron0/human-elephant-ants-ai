@@ -96,6 +96,7 @@ class TestStageEditor(unittest.TestCase):
         self.assertEqual(payload['verification_status'], 'VERIFIED')
         self.assertEqual(payload['verification_key'], result['position_key'])
         self.assertEqual(payload['optimal_moves'], result['moves'])
+        self.assertEqual(payload['defender_policy'], result['defender_policy'])
         editor.app.show_view.assert_called_once_with('puzzle_select')
 
     @patch('views.stage_editor_view.storage.save_custom_stage')

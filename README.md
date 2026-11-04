@@ -1,6 +1,6 @@
 # Chess-Sut: Human-Elephant-Ant AI Tactical Game
 
-An adversarial tactical board game and AI research framework developed for the Artificial Intelligence course at Universitas Ciputra Surabaya (2026). The defender uses depth-limited Minimax with Alpha-Beta Pruning, move ordering, and non-transitive evaluation. Bounded puzzle verification reports uncertainty explicitly; the playing agent is not a proof of globally optimal defense.
+An adversarial tactical board game and AI research framework developed for the Artificial Intelligence course at Universitas Ciputra Surabaya (2026). Puzzle mode defaults to proven exact defense. Practice and benchmark agents use depth-limited Minimax, Alpha-Beta Pruning, move ordering and non-transitive evaluation. Incomplete exact analysis is reported explicitly and never replaced with a guessed reply.
 
 ---
 
@@ -28,6 +28,7 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 ### Tactical Stage Studio & Custom Stage Builder
 - **Custom Puzzle Verification:** Creation/editing runs adversarial Minimax against every legal defensive reply, with iterative horizons to establish the minimum number of player moves needed against best defense. Verification runs in a background thread, with a 120-second/3,000,000-node budget and a 14-player-move horizon. A completed negative search only excludes wins within that horizon; a budget exhaustion is `UNVERIFIED`. Neither result receives a minimum or can be saved as a verified custom stage. Static BFS routes are not accepted as winning proofs.
 - **Stored Minimum Steps:** Verified counts, a sample line of play and a layout fingerprint are saved with each custom stage. Loading uses this result without rerunning a search. A changed layout, legacy BFS result or missing proof shows `Minimum: unverified`; custom stages must be verified in the editor before play. Verified stages use a move limit of three times their proven minimum.
+- **Exact Puzzle Defender:** The default puzzle model uses proven defensive decisions saved during verification. For a position not covered by the saved policy, the same exact solver runs in the background within the remaining player-move limit. Finite-distance decisions are exact; a failure certificate is reused only within its proven horizon. Analysis has the 120-second/3,000,000-node budget. If it is incomplete, the AI pauses with Retry/Undo/Reset available and never falls back to a shallow or random reply. Existing stages without a saved policy are analyzed lazily; re-verifying/saving preloads reusable decisions. Deliberately weaker practice baselines remain explicit choices, and benchmark agents are unchanged.
 - **Recoverable Mistakes:** Losing the puzzle leaves its board and move history available for Undo or Reset. Each successful undo action is counted, including when it restores both the player's move and the AI's reply. Losing a predicted winning strategy does not immediately end play.
 - **Custom Stages Only:** The puzzle menu loads stages created and saved by users. Create, edit, delete and play custom stages from one catalog with board thumbnails, AI selection and per-stage records. An empty catalog prompts the user to create a stage; Play stays disabled. Built-in presets, category tabs and random challenges have been removed, including their worker/cache/polling code and launch fallbacks.
 - **Spoiler Prevention Toggle:** Toggle search metrics display before playing to prevent move spoilers.
@@ -35,7 +36,7 @@ Chess-Sut transforms the standard piece hierarchy of chess into an Indonesian fo
 ### Adversarial Search Architecture
 - **Algorithm:** Minimax Search with Alpha-Beta Pruning, Leaf Node Evaluation, and Dynamic Move Ordering.
 - **Non-Transitive Evaluation Function:** Dynamic piece weights computed from opponent's remaining suit distribution combined with corner distance Chebyshev/Manhattan heuristics.
-- **Search Budget:** Optimized search uses iterative deepening with a 1.95-second budget and a legal fallback. An interrupted iteration is discarded and the board is restored. Telemetry reports completed depth and timeouts; depth 6 and a hard wall-clock bound are not guaranteed on arbitrary hardware. The vanilla baseline has no time cutoff.
+- **Practice/Benchmark Search Budget:** Optimized practice and benchmark search uses iterative deepening with a 1.95-second budget and a legal fallback. An interrupted iteration is discarded and the board is restored. Telemetry reports completed depth and timeouts; depth 6 and a hard wall-clock bound are not guaranteed on arbitrary hardware. The vanilla baseline has no time cutoff. Puzzle mode's default Exact Defender uses the proof solver described above instead.
 
 ---
 

@@ -207,7 +207,7 @@ class TestPuzzleControls(unittest.TestCase):
 
     def test_losing_capture_keeps_undo_available_and_counts_it(self):
         view = object.__new__(PuzzleGameView)
-        view.config = {'undo_enabled': True}
+        view.config = {'undo_enabled': True, 'agent_model': 'baseline_1_random'}
         view.is_game_active = True
         view.session = PuzzleSession(generate_benchmark_corpus(1)[0])
         view.state = GameState(3, custom_setup=True)
