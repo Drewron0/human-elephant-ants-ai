@@ -1,0 +1,1 @@
+"""Chess-Sut application package."""
