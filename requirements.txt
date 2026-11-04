@@ -1,8 +1,2 @@
-# Chess-Sut AI Agent Dependencies
-# Piece artwork uses Pillow for transparent cropping and smooth resizing.
-# Python >= 3.8 recommended
-Pillow>=10.0.0
-
-# Optional testing & linting tools
-pytest>=8.0.0
-black>=24.0.0
+# Runtime dependencies. Tkinter ships with the Python installer.
+Pillow>=10.1.0
